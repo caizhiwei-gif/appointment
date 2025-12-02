@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>治疗预约系统</title>
     <!-- LeanCloud SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.2/dist/av-min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <!-- Excel导出 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -30,26 +30,30 @@
         }
         
         /* 加载遮罩 */
-        .loading-overlay {
+        .loading-mask {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(255,255,255,0.95);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
             z-index: 9999;
+            color: white;
         }
-        .loading-overlay.hide { display: none; }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid var(--bg);
-            border-top-color: var(--primary);
+        .loading-mask.hide { display: none; }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin-bottom: 20px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text { margin-top: 15px; color: var(--text2); }
+        .loading-text { font-size: 1.1rem; }
+        .loading-error { color: #ffcccc; margin-top: 10px; font-size: 0.9rem; }
         
         .login-page {
             min-height: 100vh;
@@ -76,7 +80,7 @@
             padding: 4px 12px;
             border-radius: 20px;
             font-size: 0.7rem;
-            margin-top: 8px;
+            margin-top: 10px;
         }
         
         .app-container { display: none; padding: 20px; }
@@ -444,9 +448,10 @@
 <body>
 
 <!-- 加载遮罩 -->
-<div class="loading-overlay" id="loadingOverlay">
-    <div class="spinner"></div>
+<div class="loading-mask" id="loadingMask">
+    <div class="loading-spinner"></div>
     <div class="loading-text">正在连接云端...</div>
+    <div class="loading-error" id="loadingError"></div>
 </div>
 
 <!-- 登录页面 -->
@@ -455,7 +460,7 @@
         <div class="login-header">
             <h1>🏥 治疗预约系统</h1>
             <p>请登录以继续</p>
-            <div class="cloud-badge">☁️ 云端数据同步</div>
+            <span class="cloud-badge">☁️ 云端同步版</span>
         </div>
         <form onsubmit="doLogin(event)">
             <div class="form-group">
@@ -469,8 +474,7 @@
             <button type="submit" class="btn btn-primary btn-full" id="loginBtn">登 录</button>
         </form>
         <p style="text-align:center;color:var(--text2);font-size:0.75rem;margin-top:15px;">
-            首次使用会自动创建超管账号<br>
-            superadmin / super123
+            首次使用默认账号：superadmin / super123
         </p>
     </div>
 </div>
@@ -622,7 +626,7 @@
                     <button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button>
                 </div>
                 <div class="filter-btn" data-perm="export">
-                    <button class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button>
+                    <button class="btn btn-success" onclick="exportExcel()">📊 导出</button>
                 </div>
                 <div class="filter-btn" data-perm="batchdel">
                     <button class="btn btn-danger" onclick="batchDelete()">🗑️ 批量删除</button>
@@ -650,6 +654,14 @@
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
                 </div>
                 <div class="tbl-wrap" id="cfgTable"></div>
+            </div>
+            <div class="card" data-perm="cleardata">
+                <div class="card-header">
+                    <h2>🗄️ 数据管理</h2>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-danger" onclick="clearRecordsData()">🗑️ 清除预约记录</button>
+                </div>
             </div>
         </div>
     </div>
@@ -685,8 +697,8 @@
                 </div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openUserModal()">➕ 添加用户</button>
-                    <button class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载导入模板</button>
-                    <button class="btn btn-primary" onclick="document.getElementById('fileUserImport').click()">📤 导入用户</button>
+                    <button class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载模板</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileUserImport').click()">📤 导入</button>
                     <input type="file" id="fileUserImport" accept=".xlsx,.xls" style="display:none" onchange="importUsers(event)">
                 </div>
                 <div class="tbl-wrap" id="userTable"></div>
@@ -737,22 +749,22 @@
             <button class="modal-close" onclick="hideModal('userModal')">✕</button>
         </div>
         <form id="userForm" onsubmit="saveUser(event)">
-            <input type="hidden" id="userId">
+            <input type="hidden" id="uId">
             <div class="form-group">
                 <label>用户名 <span class="required">*</span></label>
-                <input type="text" class="form-control" id="userUsername" required>
+                <input type="text" class="form-control" id="uUsername" required>
             </div>
             <div class="form-group">
                 <label>姓名 <span class="required">*</span></label>
-                <input type="text" class="form-control" id="userName" required>
+                <input type="text" class="form-control" id="uName" required>
             </div>
             <div class="form-group">
-                <label>密码 <span style="font-weight:normal;color:var(--text2);font-size:0.8rem;">(预约人员可留空)</span></label>
-                <input type="password" class="form-control" id="userPwd" placeholder="留空则保持原密码">
+                <label>密码</label>
+                <input type="password" class="form-control" id="uPwd" placeholder="留空保持原密码">
             </div>
             <div class="form-group">
                 <label>角色 <span class="required">*</span></label>
-                <select class="form-control" id="userRole" required>
+                <select class="form-control" id="uRole" required>
                     <option value="operator">预约人员</option>
                     <option value="admin">管理员</option>
                     <option value="superadmin">超级管理员</option>
@@ -766,7 +778,7 @@
     </div>
 </div>
 
-<!-- 超管验证模态框 -->
+<!-- 超管验证 -->
 <div class="modal-mask" id="superPwdModal">
     <div class="modal-box" style="max-width:360px;">
         <div class="modal-head">
@@ -794,9 +806,15 @@ AV.init({
     serverURL: "https://yjxnbplz.lc-cn-n1-shared.com"
 });
 
+// 数据类
+const AppUser = AV.Object.extend('AppUser');
+const AppConfig = AV.Object.extend('AppConfig');
+const AppRecord = AV.Object.extend('AppRecord');
+
 // ==================== 全局状态 ====================
 let currentUser = null;
 let superPwdCallback = null;
+let cachedUsers = [];
 let cachedConfigs = [];
 let cachedRecords = [];
 
@@ -808,154 +826,221 @@ const PERMS = {
 };
 
 // ==================== 工具函数 ====================
-function showLoading(text = '加载中...') {
-    document.getElementById('loadingOverlay').classList.remove('hide');
-    document.querySelector('.loading-text').textContent = text;
-}
-
-function hideLoading() {
-    document.getElementById('loadingOverlay').classList.add('hide');
-}
-
 function fmtDate(d) {
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-
 function getWeekday(s) {
     return ['日','一','二','三','四','五','六'][new Date(s).getDay()];
 }
-
 function isValidPhone(phone) {
     return /^1[3-9]\d{9}$/.test(phone);
 }
-
 function getPhoneStatus(phone) {
     if (!phone) return { valid: false, msg: '请输入11位中国大陆手机号码', class: '' };
     phone = phone.replace(/\s/g, '');
-    if (!/^\d+$/.test(phone)) return { valid: false, msg: '❌ 手机号只能包含数字', class: 'error' };
-    if (phone.length < 11) return { valid: false, msg: `❌ 还需要${11 - phone.length}位数字`, class: 'error' };
-    if (phone.length > 11) return { valid: false, msg: '❌ 手机号不能超过11位', class: 'error' };
+    if (!/^\d+$/.test(phone)) return { valid: false, msg: '❌ 只能输入数字', class: 'error' };
+    if (phone.length < 11) return { valid: false, msg: `❌ 还需${11-phone.length}位`, class: 'error' };
+    if (phone.length > 11) return { valid: false, msg: '❌ 不能超过11位', class: 'error' };
     if (phone[0] !== '1') return { valid: false, msg: '❌ 必须以1开头', class: 'error' };
     if (!/[3-9]/.test(phone[1])) return { valid: false, msg: '❌ 第二位必须是3-9', class: 'error' };
     if (isValidPhone(phone)) return { valid: true, msg: '✅ 格式正确', class: 'success' };
     return { valid: false, msg: '❌ 格式不正确', class: 'error' };
 }
 
-// ==================== 云数据库操作 ====================
-const DB = {
+// ==================== 云端数据操作 ====================
+const CloudDB = {
+    // 初始化默认数据
+    async initDefaultData() {
+        // 检查是否有用户
+        const userQuery = new AV.Query(AppUser);
+        const userCount = await userQuery.count();
+        
+        if (userCount === 0) {
+            // 创建默认超管
+            const admin = new AppUser();
+            admin.set('username', 'superadmin');
+            admin.set('password', 'super123');
+            admin.set('name', '超级管理员');
+            admin.set('role', 'superadmin');
+            await admin.save();
+            console.log('已创建默认超管账号');
+        }
+        
+        // 检查是否有配置
+        const cfgQuery = new AV.Query(AppConfig);
+        const cfgCount = await cfgQuery.count();
+        
+        if (cfgCount === 0) {
+            // 创建默认配置
+            const defaultCfgs = [
+                { name: '针灸理疗', days: 10, slots: ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00'], capacity: 3 },
+                { name: '推拿按摩', days: 7, slots: ['09:00-10:00','10:00-11:00','14:00-15:00','15:00-16:00'], capacity: 2 },
+                { name: '康复训练', days: 14, slots: ['09:00-10:30','10:30-12:00','14:00-15:30','15:30-17:00'], capacity: 5 }
+            ];
+            
+            for (const cfg of defaultCfgs) {
+                const c = new AppConfig();
+                c.set('name', cfg.name);
+                c.set('days', cfg.days);
+                c.set('slots', cfg.slots);
+                c.set('capacity', cfg.capacity);
+                await c.save();
+            }
+            console.log('已创建默认配置');
+        }
+    },
+    
     // 用户相关
     async getUsers() {
-        const query = new AV.Query('AppUser');
+        const query = new AV.Query(AppUser);
         query.limit(1000);
         const results = await query.find();
-        return results.map(r => ({ id: r.id, ...r.toJSON() }));
+        cachedUsers = results.map(r => ({
+            id: r.id,
+            username: r.get('username'),
+            password: r.get('password'),
+            name: r.get('name'),
+            role: r.get('role')
+        }));
+        return cachedUsers;
     },
     
     async addUser(data) {
-        const AppUser = AV.Object.extend('AppUser');
-        const user = new AppUser();
-        Object.keys(data).forEach(k => user.set(k, data[k]));
-        const saved = await user.save();
-        return { id: saved.id, ...saved.toJSON() };
+        const u = new AppUser();
+        u.set('username', data.username);
+        u.set('password', data.password);
+        u.set('name', data.name);
+        u.set('role', data.role);
+        const saved = await u.save();
+        return { id: saved.id, ...data };
     },
     
     async updateUser(id, data) {
-        const user = AV.Object.createWithoutData('AppUser', id);
-        Object.keys(data).forEach(k => user.set(k, data[k]));
-        await user.save();
+        const u = AV.Object.createWithoutData('AppUser', id);
+        if (data.username) u.set('username', data.username);
+        if (data.password) u.set('password', data.password);
+        if (data.name) u.set('name', data.name);
+        if (data.role) u.set('role', data.role);
+        await u.save();
     },
     
     async deleteUser(id) {
-        const user = AV.Object.createWithoutData('AppUser', id);
-        await user.destroy();
+        const u = AV.Object.createWithoutData('AppUser', id);
+        await u.destroy();
     },
     
     // 配置相关
     async getConfigs() {
-        const query = new AV.Query('Config');
-        query.limit(1000);
+        const query = new AV.Query(AppConfig);
+        query.limit(100);
         const results = await query.find();
-        cachedConfigs = results.map(r => ({ id: r.id, ...r.toJSON() }));
+        cachedConfigs = results.map(r => ({
+            id: r.id,
+            name: r.get('name'),
+            days: r.get('days'),
+            slots: r.get('slots'),
+            capacity: r.get('capacity')
+        }));
         return cachedConfigs;
     },
     
     async addConfig(data) {
-        const Config = AV.Object.extend('Config');
-        const config = new Config();
-        Object.keys(data).forEach(k => config.set(k, data[k]));
-        const saved = await config.save();
-        return { id: saved.id, ...saved.toJSON() };
+        const c = new AppConfig();
+        c.set('name', data.name);
+        c.set('days', data.days);
+        c.set('slots', data.slots);
+        c.set('capacity', data.capacity);
+        const saved = await c.save();
+        return { id: saved.id, ...data };
     },
     
     async updateConfig(id, data) {
-        const config = AV.Object.createWithoutData('Config', id);
-        Object.keys(data).forEach(k => config.set(k, data[k]));
-        await config.save();
+        const c = AV.Object.createWithoutData('AppConfig', id);
+        if (data.name) c.set('name', data.name);
+        if (data.days) c.set('days', data.days);
+        if (data.slots) c.set('slots', data.slots);
+        if (data.capacity) c.set('capacity', data.capacity);
+        await c.save();
     },
     
     async deleteConfig(id) {
-        const config = AV.Object.createWithoutData('Config', id);
-        await config.destroy();
+        const c = AV.Object.createWithoutData('AppConfig', id);
+        await c.destroy();
+    },
+    
+    // 预约记录相关
+    async getRecords() {
+        const query = new AV.Query(AppRecord);
+        query.limit(1000);
+        query.descending('createdAt');
+        const results = await query.find();
+        cachedRecords = results.map(r => ({
+            id: r.id,
+            name: r.get('customerName'),
+            phone: r.get('phone'),
+            project: r.get('project'),
+            date: r.get('date'),
+            slot: r.get('slot'),
+            operator: r.get('operator'),
+            remark: r.get('remark'),
+            status: r.get('status'),
+            createdBy: r.get('createdBy'),
+            createdByName: r.get('createdByName'),
+            createdByRole: r.get('createdByRole'),
+            createdAt: r.createdAt.toISOString()
+        }));
+        return cachedRecords;
+    },
+    
+    async addRecord(data) {
+        const r = new AppRecord();
+        r.set('customerName', data.name);
+        r.set('phone', data.phone);
+        r.set('project', data.project);
+        r.set('date', data.date);
+        r.set('slot', data.slot);
+        r.set('operator', data.operator);
+        r.set('remark', data.remark);
+        r.set('status', data.status);
+        r.set('createdBy', data.createdBy);
+        r.set('createdByName', data.createdByName);
+        r.set('createdByRole', data.createdByRole);
+        const saved = await r.save();
+        return { id: saved.id, ...data, createdAt: saved.createdAt.toISOString() };
+    },
+    
+    async updateRecord(id, data) {
+        const r = AV.Object.createWithoutData('AppRecord', id);
+        Object.keys(data).forEach(k => r.set(k, data[k]));
+        await r.save();
+    },
+    
+    async deleteRecord(id) {
+        const r = AV.Object.createWithoutData('AppRecord', id);
+        await r.destroy();
+    },
+    
+    async clearRecords() {
+        const query = new AV.Query(AppRecord);
+        query.limit(1000);
+        const records = await query.find();
+        await AV.Object.destroyAll(records);
+    },
+    
+    // 统计预约数
+    countBooked(project, date, slot) {
+        return cachedRecords.filter(r => 
+            r.project === project && r.date === date && 
+            (slot ? r.slot === slot : true) && r.status !== 'cancelled'
+        ).length;
     },
     
     getCfgByName(name) {
         return cachedConfigs.find(c => c.name === name);
     },
     
-    // 记录相关
-    async getRecords() {
-        const query = new AV.Query('Record');
-        query.limit(1000);
-        query.descending('createdAt');
-        const results = await query.find();
-        cachedRecords = results.map(r => ({ id: r.id, ...r.toJSON() }));
-        return cachedRecords;
-    },
-    
-    async addRecord(data) {
-        const Record = AV.Object.extend('Record');
-        const record = new Record();
-        Object.keys(data).forEach(k => record.set(k, data[k]));
-        record.set('createdBy', currentUser.username);
-        record.set('createdByName', currentUser.name);
-        record.set('createdByRole', currentUser.role);
-        const saved = await record.save();
-        return { id: saved.id, ...saved.toJSON() };
-    },
-    
-    async updateRecord(id, data) {
-        const record = AV.Object.createWithoutData('Record', id);
-        Object.keys(data).forEach(k => record.set(k, data[k]));
-        await record.save();
-    },
-    
-    async deleteRecord(id) {
-        const record = AV.Object.createWithoutData('Record', id);
-        await record.destroy();
-    },
-    
-    async deleteRecords(ids) {
-        const objects = ids.map(id => AV.Object.createWithoutData('Record', id));
-        await AV.Object.destroyAll(objects);
-    },
-    
-    countBooked(name, date, slot) {
-        return cachedRecords.filter(r => 
-            r.project === name && r.date === date && 
-            (slot ? r.slot === slot : true) && r.status !== 'cancelled'
-        ).length;
-    },
-    
-    canBook(name, date, slot) {
-        const cfg = this.getCfgByName(name);
-        if (!cfg) return { ok: false, msg: '项目不存在' };
-        const cnt = this.countBooked(name, date, slot);
-        const left = cfg.capacity - cnt;
-        return left > 0 ? { ok: true, left } : { ok: false, msg: '已约满', left: 0 };
-    },
-    
-    getAvailDates(name) {
-        const cfg = this.getCfgByName(name);
+    getAvailDates(projectName) {
+        const cfg = this.getCfgByName(projectName);
         if (!cfg) return [];
         const dates = [];
         const today = new Date(); today.setHours(0,0,0,0);
@@ -968,52 +1053,7 @@ const DB = {
     }
 };
 
-// ==================== 初始化 ====================
-async function initApp() {
-    showLoading('正在连接云端...');
-    try {
-        // 检查是否有用户，没有则创建默认超管
-        const users = await DB.getUsers();
-        if (users.length === 0) {
-            showLoading('初始化系统...');
-            await DB.addUser({ username: 'superadmin', password: 'super123', name: '超级管理员', role: 'superadmin' });
-            await DB.addUser({ username: 'admin', password: 'admin123', name: '管理员', role: 'admin' });
-            await DB.addUser({ username: 'user1', password: '', name: '预约员1', role: 'operator' });
-        }
-        
-        // 检查是否有配置
-        const configs = await DB.getConfigs();
-        if (configs.length === 0) {
-            showLoading('初始化默认配置...');
-            await DB.addConfig({ name: '针灸理疗', days: 10, slots: ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00'], capacity: 3 });
-            await DB.addConfig({ name: '推拿按摩', days: 7, slots: ['09:00-10:00','10:00-11:00','14:00-15:00','15:00-16:00'], capacity: 2 });
-            await DB.addConfig({ name: '康复训练', days: 14, slots: ['09:00-10:30','10:30-12:00','14:00-15:30','15:30-17:00'], capacity: 5 });
-            await DB.getConfigs(); // 刷新缓存
-        }
-        
-        // 加载记录
-        await DB.getRecords();
-        
-        hideLoading();
-        document.getElementById('loginPage').style.display = 'flex';
-        
-        // 检查会话
-        const saved = sessionStorage.getItem('currentUser');
-        if (saved) {
-            currentUser = JSON.parse(saved);
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('appContainer').classList.add('show');
-            applyPerms();
-            await initBooking();
-        }
-    } catch (err) {
-        hideLoading();
-        alert('连接云端失败: ' + err.message);
-        console.error(err);
-    }
-}
-
-// ==================== 权限 ====================
+// ==================== 权限检查 ====================
 function hasPerm(perm) {
     if (!currentUser) return false;
     return PERMS[currentUser.role]?.includes(perm) || false;
@@ -1023,6 +1063,7 @@ function applyPerms() {
     document.querySelectorAll('[data-perm]').forEach(el => {
         el.classList.toggle('perm-hide', !hasPerm(el.dataset.perm));
     });
+    
     const badge = document.getElementById('navRoleBadge');
     badge.textContent = ROLE_NAMES[currentUser.role];
     badge.className = 'role-badge role-' + currentUser.role;
@@ -1033,23 +1074,27 @@ function applyPerms() {
 // ==================== 登录登出 ====================
 async function doLogin(e) {
     e.preventDefault();
+    const username = document.getElementById('loginUser').value.trim();
+    const pwd = document.getElementById('loginPwd').value;
     const btn = document.getElementById('loginBtn');
+    
     btn.disabled = true;
     btn.textContent = '登录中...';
     
     try {
-        const username = document.getElementById('loginUser').value.trim();
-        const pwd = document.getElementById('loginPwd').value;
+        await CloudDB.getUsers();
+        const user = cachedUsers.find(u => u.username === username);
         
-        const users = await DB.getUsers();
-        const user = users.find(u => u.username === username);
-        
-        if (!user) { alert('用户不存在！'); return; }
+        if (!user) {
+            alert('用户不存在！');
+            return;
+        }
         
         if (user.role === 'operator' && !user.password) {
-            // 无密码可登录
+            // 允许
         } else if (user.password !== pwd) {
-            alert('密码错误！'); return;
+            alert('密码错误！');
+            return;
         }
         
         currentUser = user;
@@ -1061,7 +1106,7 @@ async function doLogin(e) {
         applyPerms();
         await initBooking();
     } catch (err) {
-        alert('登录失败: ' + err.message);
+        alert('登录失败：' + err.message);
     } finally {
         btn.disabled = false;
         btn.textContent = '登 录';
@@ -1073,36 +1118,32 @@ function doLogout() {
     sessionStorage.removeItem('currentUser');
     document.getElementById('appContainer').classList.remove('show');
     document.getElementById('loginPage').style.display = 'flex';
-    document.getElementById('loginUser').value = '';
-    document.getElementById('loginPwd').value = '';
 }
 
 // ==================== 超管验证 ====================
-async function requireSuperPwd(callback) {
+function requireSuperPwd(callback) {
     superPwdCallback = callback;
     document.getElementById('superPwdInput').value = '';
     document.getElementById('superPwdModal').classList.add('show');
 }
 
-async function verifySuperPwd(e) {
+function verifySuperPwd(e) {
     e.preventDefault();
     const pwd = document.getElementById('superPwdInput').value;
-    const users = await DB.getUsers();
-    const superUsers = users.filter(u => u.role === 'superadmin');
-    const valid = superUsers.some(u => u.password === pwd);
-    
+    const valid = cachedUsers.filter(u => u.role === 'superadmin').some(u => u.password === pwd);
     if (valid) {
         hideModal('superPwdModal');
         if (superPwdCallback) superPwdCallback();
     } else {
-        alert('超管密码错误！');
+        alert('密码错误！');
     }
 }
 
 // ==================== 页面切换 ====================
 async function showPage(name, el) {
     if (!hasPerm(name) && !['booking','dashboard','records'].includes(name)) {
-        alert('您没有权限！'); return;
+        alert('无权限！');
+        return;
     }
     
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1110,17 +1151,12 @@ async function showPage(name, el) {
     document.getElementById('page-' + name).classList.add('active');
     if (el) el.classList.add('active');
     
-    showLoading('加载数据...');
-    try {
-        if (name === 'booking') await initBooking();
-        if (name === 'dashboard') await initDashboard();
-        if (name === 'records') await initRecords();
-        if (name === 'config') await loadCfgTable();
-        if (name === 'share') initShare();
-        if (name === 'users') await loadUserTable();
-    } finally {
-        hideLoading();
-    }
+    if (name === 'booking') await initBooking();
+    if (name === 'dashboard') await initDashboard();
+    if (name === 'records') await initRecords();
+    if (name === 'config') await loadCfgTable();
+    if (name === 'share') initShare();
+    if (name === 'users') await loadUserTable();
 }
 
 function hideModal(id) { document.getElementById(id).classList.remove('show'); }
@@ -1129,25 +1165,22 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 let bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
 
 async function initBooking() {
-    await DB.getConfigs();
-    await DB.getRecords();
-    
+    await CloudDB.getConfigs();
     const sel = document.getElementById('selProject');
     sel.innerHTML = '<option value="">请选择预约项目</option>';
     cachedConfigs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
     resetBooking();
 }
 
-document.getElementById('selProject').addEventListener('change', async function() {
+document.getElementById('selProject').addEventListener('change', function() {
     bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
     document.getElementById('modeGroup').style.display = 'none';
     document.getElementById('dateGroup').style.display = 'none';
     document.getElementById('timeGroup').style.display = 'none';
-    document.querySelectorAll('#modeGroup .sel-item').forEach(x => x.classList.remove('selected'));
     
     if (this.value) {
         bookState.project = this.value;
-        bookState.cfg = DB.getCfgByName(this.value);
+        bookState.cfg = CloudDB.getCfgByName(this.value);
         document.getElementById('modeGroup').style.display = 'block';
     }
     checkSubmit();
@@ -1175,7 +1208,7 @@ function pickMode(mode) {
 }
 
 function renderDates(filterSlot) {
-    const dates = DB.getAvailDates(bookState.project);
+    const dates = CloudDB.getAvailDates(bookState.project);
     const cfg = bookState.cfg;
     let html = '';
     
@@ -1186,9 +1219,9 @@ function renderDates(filterSlot) {
         
         let avail = 0;
         if (filterSlot) {
-            avail = cfg.capacity - DB.countBooked(bookState.project, dt, filterSlot);
+            avail = cfg.capacity - CloudDB.countBooked(bookState.project, dt, filterSlot);
         } else {
-            cfg.slots.forEach(s => { avail += cfg.capacity - DB.countBooked(bookState.project, dt, s); });
+            cfg.slots.forEach(s => { avail += cfg.capacity - CloudDB.countBooked(bookState.project, dt, s); });
         }
         
         const full = avail <= 0;
@@ -1210,9 +1243,9 @@ function renderSlots(filterDate) {
     cfg.slots.forEach(s => {
         let avail = 0;
         if (filterDate) {
-            avail = cfg.capacity - DB.countBooked(bookState.project, filterDate, s);
+            avail = cfg.capacity - CloudDB.countBooked(bookState.project, filterDate, s);
         } else {
-            DB.getAvailDates(bookState.project).forEach(dt => { avail += cfg.capacity - DB.countBooked(bookState.project, dt, s); });
+            CloudDB.getAvailDates(bookState.project).forEach(dt => { avail += cfg.capacity - CloudDB.countBooked(bookState.project, dt, s); });
         }
         
         const full = avail <= 0;
@@ -1251,10 +1284,8 @@ function checkSubmit() {
     const phone = document.getElementById('inpPhone').value.trim();
     const phoneInput = document.getElementById('inpPhone');
     const phoneHint = document.getElementById('phoneHint');
-    const nameInput = document.getElementById('inpName');
-    const nameHint = document.getElementById('nameHint');
-    
     const phoneStatus = getPhoneStatus(phone);
+    
     phoneInput.classList.remove('valid', 'invalid');
     phoneHint.classList.remove('error', 'success');
     if (phone) {
@@ -1263,24 +1294,25 @@ function checkSubmit() {
     }
     phoneHint.textContent = phoneStatus.msg;
     
+    const nameInput = document.getElementById('inpName');
+    const nameHint = document.getElementById('nameHint');
     nameInput.classList.remove('valid', 'invalid');
     nameHint.classList.remove('error', 'success');
     if (name) {
         if (name.length >= 2) {
             nameInput.classList.add('valid');
-            nameHint.textContent = '✅ 姓名正确';
+            nameHint.textContent = '✅';
             nameHint.classList.add('success');
         } else {
             nameInput.classList.add('invalid');
-            nameHint.textContent = '❌ 至少2个字符';
+            nameHint.textContent = '❌ 至少2字符';
             nameHint.classList.add('error');
         }
     } else {
         nameHint.textContent = '';
     }
     
-    const canSubmit = name && name.length >= 2 && phoneStatus.valid && bookState.project && bookState.date && bookState.slot;
-    document.getElementById('btnSubmit').disabled = !canSubmit;
+    document.getElementById('btnSubmit').disabled = !(name && name.length >= 2 && phoneStatus.valid && bookState.project && bookState.date && bookState.slot);
 }
 
 document.getElementById('inpName').addEventListener('input', checkSubmit);
@@ -1298,15 +1330,19 @@ document.getElementById('bookingForm').addEventListener('submit', async function
         return;
     }
     
-    // 刷新数据确保最新
-    await DB.getRecords();
+    const cfg = CloudDB.getCfgByName(bookState.project);
+    const booked = CloudDB.countBooked(bookState.project, bookState.date, bookState.slot);
+    if (booked >= cfg.capacity) {
+        alert('该时段已满！');
+        return;
+    }
     
-    const chk = DB.canBook(bookState.project, bookState.date, bookState.slot);
-    if (!chk.ok) { alert('预约失败：' + chk.msg); return; }
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.textContent = '提交中...';
     
-    showLoading('正在提交...');
     try {
-        const saved = await DB.addRecord({
+        const rec = {
             name: document.getElementById('inpName').value.trim(),
             phone: phone,
             project: bookState.project,
@@ -1314,10 +1350,14 @@ document.getElementById('bookingForm').addEventListener('submit', async function
             slot: bookState.slot,
             operator: document.getElementById('inpOperator').value.trim() || currentUser.name,
             remark: document.getElementById('inpRemark').value.trim(),
-            status: 'confirmed'
-        });
+            status: 'confirmed',
+            createdBy: currentUser.username,
+            createdByName: currentUser.name,
+            createdByRole: currentUser.role
+        };
         
-        await DB.getRecords(); // 刷新缓存
+        const saved = await CloudDB.addRecord(rec);
+        cachedRecords.unshift(saved);
         
         document.getElementById('cfmName').textContent = saved.name;
         document.getElementById('cfmPhone').textContent = saved.phone;
@@ -1328,9 +1368,10 @@ document.getElementById('bookingForm').addEventListener('submit', async function
         document.getElementById('formCard').style.display = 'none';
         document.getElementById('successCard').style.display = 'block';
     } catch (err) {
-        alert('提交失败: ' + err.message);
+        alert('提交失败：' + err.message);
     } finally {
-        hideLoading();
+        btn.disabled = false;
+        btn.textContent = '确认预约';
     }
 });
 
@@ -1351,8 +1392,8 @@ function resetBooking() {
 
 // ==================== 预约看板 ====================
 async function initDashboard() {
-    await DB.getConfigs();
-    await DB.getRecords();
+    await CloudDB.getConfigs();
+    await CloudDB.getRecords();
     
     document.getElementById('dashDate').value = fmtDate(new Date());
     const allSlots = new Set();
@@ -1371,7 +1412,7 @@ function loadDashboard() {
     cachedConfigs.forEach(cfg => {
         const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
         let total = 0, booked = 0;
-        slotsChk.forEach(s => { total += cfg.capacity; booked += DB.countBooked(cfg.name, date, s); });
+        slotsChk.forEach(s => { total += cfg.capacity; booked += CloudDB.countBooked(cfg.name, date, s); });
         
         const avail = Math.max(0, total - booked);
         const pct = total > 0 ? (booked / total * 100) : 0;
@@ -1380,9 +1421,9 @@ function loadDashboard() {
         
         let slotRows = '';
         slotsChk.forEach(s => {
-            const b = DB.countBooked(cfg.name, date, s);
+            const b = CloudDB.countBooked(cfg.name, date, s);
             const r = cfg.capacity - b;
-            let sc = 'st-ok', st = '可预约';
+            let sc = 'st-ok', st = '可约';
             if (r === 0) { sc = 'st-full'; st = '已满'; }
             else if (r <= cfg.capacity * 0.3) { sc = 'st-warn'; st = '紧张'; }
             slotRows += `<tr><td>${s}</td><td>${b}/${cfg.capacity}</td><td>${r}</td><td><span class="status ${sc}">${st}</span></td></tr>`;
@@ -1408,8 +1449,8 @@ document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
 // ==================== 预约记录 ====================
 async function initRecords() {
-    await DB.getConfigs();
-    await DB.getRecords();
+    await CloudDB.getConfigs();
+    await CloudDB.getRecords();
     
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
@@ -1441,21 +1482,19 @@ function loadRecords() {
         list = list.filter(r => r.createdBy === currentUser.username);
     }
     
-    list.sort((a,b) => b.date.localeCompare(a.date) || a.slot.localeCompare(b.slot));
-    
     const confirmed = list.filter(r => r.status === 'confirmed').length;
     const success = list.filter(r => r.status === 'success').length;
     const cancelled = list.filter(r => r.status === 'cancelled').length;
     
     document.getElementById('recOverview').innerHTML = `
-        <div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>
+        <div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总计</div></div>
         <div class="overview-card"><div class="overview-val" style="color:#1890ff;">${confirmed}</div><div class="overview-lbl">待确认</div></div>
-        <div class="overview-card"><div class="overview-val" style="color:var(--success);">${success}</div><div class="overview-lbl">已成功</div></div>
-        <div class="overview-card"><div class="overview-val" style="color:var(--danger);">${cancelled}</div><div class="overview-lbl">已取消</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--success);">${success}</div><div class="overview-lbl">成功</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--danger);">${cancelled}</div><div class="overview-lbl">取消</div></div>
     `;
     
-    const tipText = currentUser.role === 'operator' ? '（仅显示您的记录）' : '';
-    document.getElementById('recSubtitle').textContent = `${start || '-'} 至 ${end || '-'} 共 ${list.length} 条${tipText}`;
+    const tipText = currentUser.role === 'operator' ? '（仅您的记录）' : '';
+    document.getElementById('recSubtitle').textContent = `共 ${list.length} 条${tipText}`;
     
     if (list.length === 0) {
         document.getElementById('recTable').innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>';
@@ -1464,36 +1503,36 @@ function loadRecords() {
     
     const canDel = hasPerm('delete');
     const canConfirm = hasPerm('confirm');
-    const canCancel = hasPerm('cancel');
     
     let html = `<table class="data-tbl"><thead><tr>
         ${canDel ? '<th class="checkbox-col"><input type="checkbox" class="cb-input" onchange="toggleAllCb(this)"></th>' : ''}
-        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>状态</th><th>创建账户</th><th>创建时间</th><th>操作</th>
+        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>状态</th><th>创建者</th><th>时间</th><th>操作</th>
     </tr></thead><tbody>`;
     
     list.forEach(r => {
-        const statMap = { confirmed: ['st-pending','待确认'], success: ['st-success','预约成功'], cancelled: ['st-cancel','已取消'] };
+        const statMap = { confirmed: ['st-pending','待确认'], success: ['st-success','成功'], cancelled: ['st-cancel','取消'] };
         const [sc, st] = statMap[r.status] || ['',''];
-        const ct = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN') : '-';
-        const creatorName = r.createdByName || r.operator || '-';
-        const creatorRole = r.createdByRole || 'operator';
-        const creatorClass = { superadmin: 'creator-super', admin: 'creator-admin', operator: 'creator-op' }[creatorRole];
+        const ct = new Date(r.createdAt).toLocaleString('zh-CN');
+        const creatorClass = { superadmin: 'creator-super', admin: 'creator-admin', operator: 'creator-op' }[r.createdByRole] || 'creator-op';
         
-        let actionBtns = '';
-        if (r.status === 'confirmed') {
-            if (canConfirm) actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
-            if (canCancel) actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+        let btns = '';
+        if (r.status === 'confirmed' && canConfirm
+                    let btns = '';
+        if (r.status === 'confirmed' && canConfirm) {
+            btns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
+            btns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         }
-        if (canDel) actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
-        if (!actionBtns) actionBtns = '<span style="color:#999;font-size:0.75rem;">无权限</span>';
+        if (canDel) btns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+        if (!btns) btns = '<span style="color:#999;font-size:0.7rem;">-</span>';
         
         html += `<tr>
             ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}
-            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td>
-            <td>${r.operator||'-'}</td><td><span class="status ${sc}">${st}</span></td>
-            <td><span class="creator-tag ${creatorClass}">${creatorName}(${ROLE_NAMES[creatorRole]})</span></td>
-            <td style="font-size:0.75rem;">${ct}</td>
-            <td><div class="btn-group">${actionBtns}</div></td>
+            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td>
+            <td>${r.date}</td><td>${r.slot}</td>
+            <td><span class="status ${sc}">${st}</span></td>
+            <td><span class="creator-tag ${creatorClass}">${r.createdByName||'-'}</span></td>
+            <td style="font-size:0.7rem;">${ct}</td>
+            <td><div class="btn-group">${btns}</div></td>
         </tr>`;
     });
     html += '</tbody></table>';
@@ -1506,77 +1545,68 @@ function toggleAllCb(master) {
 
 async function confirmRec(id) {
     if (!confirm('确认此预约？')) return;
-    showLoading('处理中...');
     try {
-        await DB.updateRecord(id, { status: 'success', confirmedBy: currentUser.name });
-        await DB.getRecords();
+        await CloudDB.updateRecord(id, { status: 'success' });
+        const r = cachedRecords.find(x => x.id === id);
+        if (r) r.status = 'success';
         loadRecords();
-    } catch (err) { alert('操作失败: ' + err.message); }
-    finally { hideLoading(); }
+    } catch (err) { alert('操作失败：' + err.message); }
 }
 
 async function cancelRec(id) {
     if (!confirm('取消此预约？')) return;
-    showLoading('处理中...');
     try {
-        await DB.updateRecord(id, { status: 'cancelled' });
-        await DB.getRecords();
+        await CloudDB.updateRecord(id, { status: 'cancelled' });
+        const r = cachedRecords.find(x => x.id === id);
+        if (r) r.status = 'cancelled';
         loadRecords();
-    } catch (err) { alert('操作失败: ' + err.message); }
-    finally { hideLoading(); }
+    } catch (err) { alert('操作失败：' + err.message); }
 }
 
-async function deleteRec(id) {
+function deleteRec(id) {
     requireSuperPwd(async () => {
-        showLoading('删除中...');
         try {
-            await DB.deleteRecord(id);
-            await DB.getRecords();
+            await CloudDB.deleteRecord(id);
+            cachedRecords = cachedRecords.filter(r => r.id !== id);
             loadRecords();
-        } catch (err) { alert('删除失败: ' + err.message); }
-        finally { hideLoading(); }
+        } catch (err) { alert('删除失败：' + err.message); }
     });
 }
 
-async function batchDelete() {
+function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
     if (selected.length === 0) { alert('请先选择！'); return; }
     
     requireSuperPwd(async () => {
-        if (confirm(`确定删除 ${selected.length} 条记录？`)) {
-            showLoading('批量删除中...');
-            try {
-                await DB.deleteRecords(selected);
-                await DB.getRecords();
-                loadRecords();
-            } catch (err) { alert('删除失败: ' + err.message); }
-            finally { hideLoading(); }
-        }
+        if (!confirm(`确定删除 ${selected.length} 条？`)) return;
+        try {
+            for (const id of selected) {
+                await CloudDB.deleteRecord(id);
+            }
+            cachedRecords = cachedRecords.filter(r => !selected.includes(r.id));
+            loadRecords();
+        } catch (err) { alert('删除失败：' + err.message); }
     });
 }
 
-async function exportExcel() {
+function exportExcel() {
     requireSuperPwd(() => {
-        const list = cachedRecords.filter(r => {
-            const start = document.getElementById('recStart').value;
-            const end = document.getElementById('recEnd').value;
-            const proj = document.getElementById('recProject').value;
-            const stat = document.getElementById('recStatus').value;
+        const start = document.getElementById('recStart').value;
+        const end = document.getElementById('recEnd').value;
+        
+        let list = cachedRecords.filter(r => {
             if (start && r.date < start) return false;
             if (end && r.date > end) return false;
-            if (proj && r.project !== proj) return false;
-            if (stat && r.status !== stat) return false;
             return true;
         });
         
         if (list.length === 0) { alert('没有数据！'); return; }
         
-        const statusMap = { confirmed: '待确认', success: '预约成功', cancelled: '已取消' };
+        const statusMap = { confirmed: '待确认', success: '成功', cancelled: '取消' };
         const data = list.map((r,i) => ({
-            '序号': i+1, '顾客姓名': r.name, '联系电话': r.phone, '预约项目': r.project,
-            '预约日期': r.date, '星期': '周'+getWeekday(r.date), '预约时段': r.slot,
-            '预约人': r.operator||'', '状态': statusMap[r.status]||r.status,
-            '创建账户': r.createdByName||'-', '创建角色': ROLE_NAMES[r.createdByRole]||'-'
+            '序号': i+1, '顾客': r.name, '电话': r.phone, '项目': r.project,
+            '日期': r.date, '时段': r.slot, '状态': statusMap[r.status]||r.status,
+            '创建者': r.createdByName||'-', '时间': new Date(r.createdAt).toLocaleString('zh-CN')
         }));
         
         const ws = XLSX.utils.json_to_sheet(data);
@@ -1588,14 +1618,14 @@ async function exportExcel() {
 
 // ==================== 系统配置 ====================
 async function loadCfgTable() {
-    await DB.getConfigs();
+    await CloudDB.getConfigs();
     
     if (cachedConfigs.length === 0) {
         document.getElementById('cfgTable').innerHTML = '<div class="empty-box"><h3>暂无配置</h3></div>';
         return;
     }
     
-    let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>可约天数</th><th>时段容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
+    let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
     cachedConfigs.forEach(c => {
         const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
         html += `<tr>
@@ -1639,37 +1669,49 @@ function addSlotRow(start, end) {
 async function saveCfg(e) {
     e.preventDefault();
     const id = document.getElementById('cfgId').value;
-    const data = {
-        name: document.getElementById('cfgName').value.trim(),
-        days: parseInt(document.getElementById('cfgDays').value),
-        capacity: parseInt(document.getElementById('cfgCap').value),
-        slots: []
-    };
+    const name = document.getElementById('cfgName').value.trim();
+    const days = parseInt(document.getElementById('cfgDays').value);
+    const capacity = parseInt(document.getElementById('cfgCap').value);
+    const slots = [];
     document.querySelectorAll('#cfgSlots .slot-row').forEach(row => {
         const inputs = row.querySelectorAll('input');
-        if (inputs[0].value && inputs[1].value) data.slots.push(inputs[0].value + '-' + inputs[1].value);
+        if (inputs[0].value && inputs[1].value) slots.push(inputs[0].value + '-' + inputs[1].value);
     });
-    if (data.slots.length === 0) { alert('请添加时段'); return; }
-    data.slots.sort();
+    if (slots.length === 0) { alert('请添加时段'); return; }
+    slots.sort();
     
-    showLoading('保存中...');
     try {
-        if (id) await DB.updateConfig(id, data);
-        else await DB.addConfig(data);
+        if (id) {
+            await CloudDB.updateConfig(id, { name, days, capacity, slots });
+            const c = cachedConfigs.find(x => x.id === id);
+            if (c) { c.name = name; c.days = days; c.capacity = capacity; c.slots = slots; }
+        } else {
+            const saved = await CloudDB.addConfig({ name, days, capacity, slots });
+            cachedConfigs.push(saved);
+        }
         hideModal('cfgModal');
-        await loadCfgTable();
-    } catch (err) { alert('保存失败: ' + err.message); }
-    finally { hideLoading(); }
+        loadCfgTable();
+    } catch (err) { alert('保存失败：' + err.message); }
 }
 
 async function delCfg(id) {
     if (!confirm('确定删除？')) return;
-    showLoading('删除中...');
     try {
-        await DB.deleteConfig(id);
-        await loadCfgTable();
-    } catch (err) { alert('删除失败: ' + err.message); }
-    finally { hideLoading(); }
+        await CloudDB.deleteConfig(id);
+        cachedConfigs = cachedConfigs.filter(c => c.id !== id);
+        loadCfgTable();
+    } catch (err) { alert('删除失败：' + err.message); }
+}
+
+function clearRecordsData() {
+    requireSuperPwd(async () => {
+        if (!confirm('确定清除所有预约记录？')) return;
+        try {
+            await CloudDB.clearRecords();
+            cachedRecords = [];
+            alert('已清除！');
+        } catch (err) { alert('清除失败：' + err.message); }
+    });
 }
 
 // ==================== 分享管理 ====================
@@ -1680,26 +1722,28 @@ function initShare() {
 }
 
 function copyLink(id) {
-    document.getElementById(id).select();
+    const inp = document.getElementById(id);
+    inp.select();
     document.execCommand('copy');
     alert('已复制！');
 }
 
 // ==================== 用户管理 ====================
 async function loadUserTable() {
-    const list = await DB.getUsers();
+    await CloudDB.getUsers();
+    
     const roleMap = { superadmin: ['ur-super','超级管理员'], admin: ['ur-admin','管理员'], operator: ['ur-op','预约人员'] };
     
     let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>密码</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(u => {
+    cachedUsers.forEach(u => {
         const [rc, rn] = roleMap[u.role] || ['',''];
         html += `<tr>
             <td>${u.username}</td><td>${u.name}</td>
             <td><span class="user-role ${rc}">${rn}</span></td>
-            <td>${u.password ? '已设置' : '无密码'}</td>
+            <td>${u.password ? '已设置' : '无'}</td>
             <td><div class="btn-group">
                 <button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button>
-                ${list.filter(x=>x.role==='superadmin').length > 1 || u.role !== 'superadmin' ? 
+                ${cachedUsers.filter(x=>x.role==='superadmin').length > 1 || u.role !== 'superadmin' ? 
                     `<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}')">删除</button>` : ''}
             </div></td>
         </tr>`;
@@ -1708,63 +1752,62 @@ async function loadUserTable() {
     document.getElementById('userTable').innerHTML = html;
 }
 
-async function openUserModal(user) {
+function openUserModal(user) {
     document.getElementById('userModalTitle').textContent = user ? '编辑用户' : '添加用户';
-    document.getElementById('userId').value = user ? user.id : '';
-    document.getElementById('userUsername').value = user ? user.username : '';
-    document.getElementById('userName').value = user ? user.name : '';
-    document.getElementById('userPwd').value = '';
-    document.getElementById('userRole').value = user ? user.role : 'operator';
+    document.getElementById('uId').value = user ? user.id : '';
+    document.getElementById('uUsername').value = user ? user.username : '';
+    document.getElementById('uName').value = user ? user.name : '';
+    document.getElementById('uPwd').value = '';
+    document.getElementById('uRole').value = user ? user.role : 'operator';
     document.getElementById('userModal').classList.add('show');
 }
 
-async function editUser(id) {
-    const users = await DB.getUsers();
-    const user = users.find(u => u.id === id);
+function editUser(id) {
+    const user = cachedUsers.find(u => u.id === id);
     if (user) openUserModal(user);
 }
 
 async function saveUser(e) {
     e.preventDefault();
-    const id = document.getElementById('userId').value;
-    const data = {
-        username: document.getElementById('userUsername').value.trim(),
-        name: document.getElementById('userName').value.trim(),
-        role: document.getElementById('userRole').value
-    };
-    const pwd = document.getElementById('userPwd').value;
-    if (pwd || !id) data.password = pwd;
+    const id = document.getElementById('uId').value;
+    const username = document.getElementById('uUsername').value.trim();
+    const name = document.getElementById('uName').value.trim();
+    const pwd = document.getElementById('uPwd').value;
+    const role = document.getElementById('uRole').value;
     
-    const users = await DB.getUsers();
-    if (users.find(u => u.username === data.username && u.id !== id)) {
-        alert('用户名已存在！'); return;
-    }
+    const exists = cachedUsers.find(u => u.username === username && u.id !== id);
+    if (exists) { alert('用户名已存在！'); return; }
     
-    showLoading('保存中...');
     try {
-        if (id) await DB.updateUser(id, data);
-        else await DB.addUser(data);
+        if (id) {
+            const updates = { username, name, role };
+            if (pwd) updates.password = pwd;
+            await CloudDB.updateUser(id, updates);
+            const u = cachedUsers.find(x => x.id === id);
+            if (u) { u.username = username; u.name = name; u.role = role; if (pwd) u.password = pwd; }
+        } else {
+            const saved = await CloudDB.addUser({ username, name, password: pwd, role });
+            cachedUsers.push(saved);
+        }
         hideModal('userModal');
-        await loadUserTable();
-    } catch (err) { alert('保存失败: ' + err.message); }
-    finally { hideLoading(); }
+        loadUserTable();
+    } catch (err) { alert('保存失败：' + err.message); }
 }
 
 async function delUser(id) {
     if (!confirm('确定删除？')) return;
-    showLoading('删除中...');
     try {
-        await DB.deleteUser(id);
-        await loadUserTable();
-    } catch (err) { alert('删除失败: ' + err.message); }
-    finally { hideLoading(); }
+        await CloudDB.deleteUser(id);
+        cachedUsers = cachedUsers.filter(u => u.id !== id);
+        loadUserTable();
+    } catch (err) { alert('删除失败：' + err.message); }
 }
 
 function downloadUserTemplate() {
-    const data = [{ '用户名': 'zhangsan', '姓名': '张三', '密码': '123456', '角色': '预约人员' }];
+    const data = [{ '用户名': 'user1', '姓名': '张三', '密码': '', '角色': '预约人员' }];
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '用户模板');
+    XLSX.utils.book_append_sheet(wb, ws, '模板');
     XLSX.writeFile(wb, '用户导入模板.xlsx');
 }
 
@@ -1775,33 +1818,70 @@ async function importUsers(e) {
         try {
             const wb = XLSX.read(ev.target.result, { type: 'array' });
             const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-            const users = await DB.getUsers();
             
-            showLoading('导入中...');
             let added = 0;
             for (const row of data) {
                 const username = row['用户名'];
                 const name = row['姓名'];
-                if (username && name && !users.find(u => u.username === username)) {
-                    const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
-                    await DB.addUser({
-                        username, name,
-                        password: String(row['密码'] || ''),
-                        role: roleMap[row['角色']] || 'operator'
-                    });
+                const pwd = row['密码'] || '';
+                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
+                const role = roleMap[row['角色']] || 'operator';
+                
+                if (username && name && !cachedUsers.find(u => u.username === username)) {
+                    const saved = await CloudDB.addUser({ username, name, password: String(pwd), role });
+                    cachedUsers.push(saved);
                     added++;
                 }
             }
-            await loadUserTable();
-            alert(`成功导入 ${added} 个用户！`);
-        } catch (err) { alert('导入失败: ' + err.message); }
-        finally { hideLoading(); }
+            loadUserTable();
+            alert(`导入 ${added} 个用户！`);
+        } catch (err) { alert('导入失败：' + err.message); }
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
 }
 
-// ==================== 启动 ====================
+// ==================== 初始化 ====================
+async function initApp() {
+    const loadingMask = document.getElementById('loadingMask');
+    const loadingError = document.getElementById('loadingError');
+    
+    try {
+        // 初始化默认数据
+        await CloudDB.initDefaultData();
+        
+        // 加载所有数据到缓存
+        await CloudDB.getUsers();
+        await CloudDB.getConfigs();
+        await CloudDB.getRecords();
+        
+        // 隐藏加载遮罩
+        loadingMask.classList.add('hide');
+        
+        // 检查是否有保存的会话
+        const saved = sessionStorage.getItem('currentUser');
+        if (saved) {
+            currentUser = JSON.parse(saved);
+            // 验证用户是否还存在
+            const exists = cachedUsers.find(u => u.id === currentUser.id);
+            if (exists) {
+                document.getElementById('loginPage').style.display = 'none';
+                document.getElementById('appContainer').classList.add('show');
+                applyPerms();
+                await initBooking();
+            } else {
+                sessionStorage.removeItem('currentUser');
+                document.getElementById('loginPage').style.display = 'flex';
+            }
+        } else {
+            document.getElementById('loginPage').style.display = 'flex';
+        }
+    } catch (err) {
+        console.error('初始化失败:', err);
+        loadingError.textContent = '连接失败: ' + err.message + '，请刷新重试';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
