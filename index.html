@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>治疗预约系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary-color: #4a90d9;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #ff4d4f;
+            --text-color: #333;
+            --text-secondary: #666;
+            --border-color: #e8e8e8;
+            --bg-color: #f5f7fa;
+            --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--text-color);
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--card-shadow);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .navbar h1 { font-size: 1.4rem; color: var(--primary-color); }
+        .admin-badge {
+            background: linear-gradient(135deg, #e65100, #ff9800);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .nav-links { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            background: var(--primary-color);
+            color: white;
+        }
+        .nav-links a.admin-nav {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .nav-links a.admin-nav:hover, .nav-links a.admin-nav.active {
+            background: #e65100;
+            color: white;
+        }
+        
+        /* 容器 */
+        .container { max-width: 800px; margin: 0 auto; }
+        .container-wide { max-width: 1400px; margin: 0 auto; }
+        
+        /* 卡片 */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--bg-color);
+        }
+        .card-header h2 { color: var(--primary-color); font-size: 1.6rem; margin-bottom: 8px; }
+        .card-header p { color: var(--text-secondary); font-size: 0.9rem; }
+        
+        /* 表单 */
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .form-group .required { color: var(--danger-color); margin-left: 4px; }
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.1);
+        }
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        /* 选择网格 */
+        .selection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .selection-grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .selection-item {
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        .selection-item:hover:not(.disabled) {
+            border-color: var(--primary-color);
+            background: rgba(74, 144, 217, 0.05);
+        }
+        .selection-item.selected {
+            border-color: var(--primary-color);
+            background: var(--primary-color);
+            color: white;
+        }
+        .selection-item.disabled {
+            background: var(--bg-color);
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        .date-day { font-size: 1.2rem; font-weight: bold; }
+        .date-weekday { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+        .selection-item.selected .date-weekday { color: rgba(255, 255, 255, 0.8); }
+        .slot-remain { font-size: 0.75rem; color: var(--success-color); margin-top: 4px; }
+        .selection-item.selected .slot-remain { color: rgba(255, 255, 255, 0.8); }
+        
+        /* 按钮 */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #667eea);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 144, 217, 0.4);
+        }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn-warning { background: var(--warning-color); color: white; }
+        .btn-secondary { background: var(--bg-color); color: var(--text-color); }
+        .btn-full { width: 100%; }
+        .btn-sm { padding: 8px 16px; font-size: 0.85rem; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        /* 筛选区 */
+        .filter-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            box-shadow: var(--card-shadow);
+        }
+        .filter-item { flex: 1; min-width: 150px; }
+        .filter-item label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .filter-item-btn { flex: 0 0 auto; }
+        
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+        }
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .stat-title { font-size: 1.1rem; font-weight: 600; }
+        .stat-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .badge-ok { background: #e6fffb; color: #13c2c2; }
+        .badge-full { background: #fff1f0; color: #ff4d4f; }
+        .stat-numbers {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        .stat-num { text-align: center; flex: 1; }
+        .stat-value { font-size: 1.8rem; font-weight: bold; color: var(--primary-color); }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); }
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-color);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .progress-fill.low { background: var(--success-color); }
+        .progress-fill.medium { background: var(--warning-color); }
+        .progress-fill.high { background: var(--danger-color); }
+        
+        /* 表格 */
+        .table-wrapper { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .data-table th, .data-table td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .data-table th { background: var(--bg-color); font-weight: 600; white-space: nowrap; }
+        .data-table tr:hover { background: rgba(74, 144, 217, 0.03); }
+        .slot-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+        .slot-table th, .slot-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .slot-table th { background: var(--bg-color); font-weight: 600; }
+        
+        /* 状态标签 */
+        .status-tag {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .status-ok { background: #e6fffb; color: #13c2c2; }
+        .status-warn { background: #fffbe6; color: #faad14; }
+        .status-full { background: #fff1f0; color: #ff4d4f; }
+        
+        /* 标签 */
+        .tag {
+            display: inline-block;
+            padding: 3px 8px;
+            background: var(--bg-color);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin: 2px;
+        }
+        
+        /* 概览统计 */
+        .overview-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .overview-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--card-shadow);
+        }
+        .overview-value { font-size: 2rem; font-weight: bold; color: var(--primary-color); }
+        .overview-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px; }
+        
+        /* 模态框 */
+        .modal-mask {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            padding: 20px;
+        }
+        .modal-mask.show { opacity: 1; visibility: visible; }
+        .modal-box {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-mask.show .modal-box { transform: translateY(0); }
+        .modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-head h3 { font-size: 1.2rem; }
+        .modal-close {
+            width: 30px; height: 30px;
+            border: none;
+            background: var(--bg-color);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: var(--danger-color); color: white; }
+        .modal-foot {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        /* 成功页面 */
+        .success-box { text-align: center; padding: 30px 20px; }
+        .success-icon {
+            width: 70px; height: 70px;
+            background: var(--success-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        .success-icon svg { width: 35px; height: 35px; color: white; }
+        .success-title { font-size: 1.4rem; margin-bottom: 10px; }
+        .success-msg { color: var(--text-secondary); margin-bottom: 25px; }
+        .info-box {
+            background: var(--bg-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 25px;
+        }
+        .info-box h4 { margin-bottom: 15px; }
+        .info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--border-color);
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { width: 90px; color: var(--text-secondary); }
+        .info-value { flex: 1; font-weight: 500; }
+        
+        /* 分享区 */
+        .share-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .share-box h3 { margin-bottom: 20px; }
+        .qr-wrap {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .qr-wrap img, .qr-wrap canvas { display: block; }
+        .link-box {
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .link-box input {
+            flex: 1;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        
+        /* 时段行 */
+        .slot-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .slot-row input { flex: 1; }
+        
+        /* 空状态 */
+        .empty-box {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-secondary);
+        }
+        .empty-box h3 { color: var(--text-color); margin-bottom: 8px; }
+        
+        /* 管理员入口 */
+        .admin-float {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+        .admin-float button {
+            background: rgba(0,0,0,0.4);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .admin-float button:hover { background: rgba(0,0,0,0.6); }
+        
+        /* 页面显示控制 */
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        /* 隐藏管理员元素 */
+        .for-admin { display: none !important; }
+        body.is-admin .for-admin { display: flex !important; }
+        body.is-admin .admin-float { display: none; }
+        body.is-admin .admin-badge-wrap { display: inline-block; }
+        .admin-badge-wrap { display: none; }
+        
+        @media (max-width: 768px) {
+            .navbar { padding: 15px; }
+            .navbar h1 { font-size: 1.2rem; }
+            .nav-links a { padding: 6px 12px; font-size: 0.8rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .selection-grid { grid-template-columns: repeat(3, 1fr); }
+            .filter-bar { flex-direction: column; }
+            .filter-item { width: 100%; }
+            .overview-row { grid-template-columns: repeat(2, 1fr); }
+            .card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>🏥 治疗预约系统</h1>
+            <span class="admin-badge-wrap"><span class="admin-badge">管理员</span></span>
+        </div>
+        <div class="nav-links">
+            <a class="active" onclick="showPage('booking', this)">预约挂号</a>
+            <a onclick="showPage('dashboard', this)">预约看板</a>
+            <a class="for-admin admin-nav" onclick="showPage('records', this)">预约记录</a>
+            <a class="for-admin admin-nav" onclick="showPage('config', this)">系统配置</a>
+            <a class="for-admin admin-nav" onclick="showPage('share', this)">分享管理</a>
+        </div>
+    </nav>
+
+    <!-- ========== 页面1：预约挂号 ========== -->
+    <div id="page-booking" class="page active">
+        <div class="container">
+            <div class="card" id="formCard">
+                <div class="card-header">
+                    <h2>📋 在线预约</h2>
+                    <p>请填写以下信息完成预约</p>
+                </div>
+                <form id="bookingForm">
+                    <div class="form-group">
+                        <label>顾客姓名 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="inpName" placeholder="请输入您的姓名" required>
+                    </div>
+                    <div class="form-group">
+                        <label>联系电话 <span class="required">*</span></label>
+                        <input type="tel" class="form-control" id="inpPhone" placeholder="请输入您的手机号码" required>
+                    </div>
+                    <div class="form-group">
+                        <label>预约项目 <span class="required">*</span></label>
+                        <select class="form-control" id="selProject" required>
+                            <option value="">请选择预约项目</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="modeGroup" style="display:none;">
+                        <label>选择方式</label>
+                        <div class="selection-grid selection-grid-2">
+                            <div class="selection-item" onclick="pickMode('date')">📅 先选日期</div>
+                            <div class="selection-item" onclick="pickMode('time')">🕐 先选时段</div>
+                        </div>
+                    </div>
+                    <div class="form-group" id="dateGroup" style="display:none;">
+                        <label>预约日期 <span class="required">*</span></label>
+                        <div class="selection-grid" id="dateGrid"></div>
+                    </div>
+                    <div class="form-group" id="timeGroup" style="display:none;">
+                        <label>预约时段 <span class="required">*</span></label>
+                        <div class="selection-grid" id="timeGrid"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>预约人</label>
+                        <input type="text" class="form-control" id="inpOperator" placeholder="填写预约操作人（选填）">
+                    </div>
+                    <div class="form-group">
+                        <label>备注信息</label>
+                        <textarea class="form-control" id="inpRemark" placeholder="如有特殊需求请在此说明（选填）"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
+                </form>
+            </div>
+            
+            <div class="card" id="successCard" style="display:none;">
+                <div class="success-box">
+                    <div class="success-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <h2 class="success-title">预约成功！</h2>
+                    <p class="success-msg">您的预约已提交成功，请按时前来就诊</p>
+                    <div class="info-box">
+                        <h4>预约信息</h4>
+                        <div class="info-row"><span class="info-label">顾客姓名</span><span class="info-value" id="cfmName"></span></div>
+                        <div class="info-row"><span class="info-label">联系电话</span><span class="info-value" id="cfmPhone"></span></div>
+                        <div class="info-row"><span class="info-label">预约项目</span><span class="info-value" id="cfmProject"></span></div>
+                        <div class="info-row"><span class="info-label">预约日期</span><span class="info-value" id="cfmDate"></span></div>
+                        <div class="info-row"><span class="info-label">预约时段</span><span class="info-value" id="cfmTime"></span></div>
+                    </div>
+                    <button class="btn btn-primary btn-full" onclick="resetBooking()">继续预约</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 页面2：预约看板 ========== -->
+    <div id="page-dashboard" class="page">
+        <div class="container-wide">
+            <div class="filter-bar">
+                <div class="filter-item">
+                    <label>📅 选择日期</label>
+                    <input type="date" class="form-control" id="dashDate">
+                </div>
+                <div class="filter-item">
+                    <label>🕐 选择时段</label>
+                    <select class="form-control" id="dashSlot">
+                        <option value="">全部时段</option>
+                    </select>
+                </div>
+                <div class="filter-item-btn">
+                    <button class="btn btn-primary" onclick="loadDashboard()">🔄 刷新</button>
+                </div>
+            </div>
+            <div class="stats-grid" id="dashStats"></div>
+        </div>
+    </div>
+
+    <!-- ========== 页面3：预约记录（管理员） ========== -->
+    <div id="page-records" class="page">
+        <div class="container-wide">
+            <div class="overview-row" id="recOverview"></div>
+            <div class="filter-bar">
+                <div class="filter-item">
+                    <label>开始日期</label>
+                    <input type="date" class="form-control" id="recStart">
+                </div>
+                <div class="filter-item">
+                    <label>结束日期</label>
+                    <input type="date" class="form-control" id="recEnd">
+                </div>
+                <div class="filter-item">
+                    <label>预约项目</label>
+                    <select class="form-control" id="recProject">
+                        <option value="">全部项目</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>状态</label>
+                    <select class="form-control" id="recStatus">
+                        <option value="">全部</option>
+                        <option value="confirmed">已确认</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </div>
+                <div class="filter-item-btn">
+                    <button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button>
+                </div>
+                <div class="filter-item-btn">
+                    <button class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h2>📋 预约记录详情</h2>
+                    <p id="recSubtitle">-</p>
+                </div>
+                <div class="table-wrapper" id="recTable"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 页面4：系统配置（管理员） ========== -->
+    <div id="page-config" class="page">
+        <div class="container-wide">
+            <div class="card">
+                <div class="card-header">
+                    <h2>⚙️ 项目配置管理</h2>
+                    <p>管理预约项目的基本配置规则</p>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <button class="btn btn-success" onclick="openConfigModal()">➕ 添加新项目</button>
+                </div>
+                <div class="table-wrapper" id="cfgTable"></div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h2>🗄️ 数据管理</h2>
+                    <p>导出、导入或清除系统数据</p>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="exportAllData()">📤 导出全部数据</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileImport').click()">📥 导入数据</button>
+                    <input type="file" id="fileImport" accept=".json" style="display:none" onchange="importAllData(event)">
+                    <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清除所有数据</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 页面5：分享管理（管理员） ========== -->
+    <div id="page-share" class="page">
+        <div class="container">
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔗 分享预约链接</h2>
+                    <p>生成二维码和链接供用户扫码预约</p>
+                </div>
+                <div class="share-box">
+                    <h3>📱 用户预约二维码</h3>
+                    <div class="qr-wrap">
+                        <div id="qrcode"></div>
+                    </div>
+                    <p style="opacity:0.9;">用户扫描二维码即可进入预约页面</p>
+                    <div class="link-box">
+                        <input type="text" id="userLink" readonly>
+                        <button class="btn btn-sm" style="background:#fff;color:#333;" onclick="copyLink('userLink')">📋 复制</button>
+                    </div>
+                </div>
+                <div style="margin-top:25px;">
+                    <h3 style="margin-bottom:15px;">🔐 管理员入口</h3>
+                    <p style="color:var(--text-secondary);margin-bottom:15px;">管理员通过以下链接进入，或点击页面右下角"管理员"按钮登录</p>
+                    <div class="link-box" style="background:#fff3e0;">
+                        <input type="text" id="adminLink" readonly>
+                        <button class="btn btn-sm btn-warning" onclick="copyLink('adminLink')">📋 复制</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员入口按钮 -->
+    <div class="admin-float">
+        <button onclick="showLoginModal()">🔐 管理员</button>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal-mask" id="loginModal">
+        <div class="modal-box" style="max-width:380px;">
+            <div class="modal-head">
+                <h3>🔐 管理员登录</h3>
+                <button class="modal-close" onclick="hideModal('loginModal')">✕</button>
+            </div>
+            <form onsubmit="doLogin(event)">
+                <div class="form-group">
+                    <label>管理员密码</label>
+                    <input type="password" class="form-control" id="inpPwd" placeholder="请输入密码" required>
+                </div>
+                <div class="modal-foot" style="border:none;padding-top:0;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('loginModal')">取消</button>
+                    <button type="submit" class="btn btn-primary">登录</button>
+                </div>
+            </form>
+            <p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:10px;">默认密码: admin123</p>
+        </div>
+    </div>
+
+    <!-- 配置模态框 -->
+    <div class="modal-mask" id="configModal">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3 id="cfgModalTitle">添加项目</h3>
+                <button class="modal-close" onclick="hideModal('configModal')">✕</button>
+            </div>
+            <form id="cfgForm" onsubmit="saveConfig(event)">
+                <input type="hidden" id="cfgId">
+                <div class="form-group">
+                    <label>项目名称 <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="cfgName" placeholder="例如：针灸理疗" required>
+                </div>
+                <div class="form-group">
+                    <label>可预约天数 <span class="required">*</span></label>
+                    <input type="number" class="form-control" id="cfgDays" placeholder="从今天开始" min="1" max="90" required>
+                </div>
+                <div class="form-group">
+                    <label>每时段可预约人数 <span class="required">*</span></label>
+                    <input type="number" class="form-control" id="cfgCapacity" placeholder="每时段最多人数" min="1" max="100" required>
+                </div>
+                <div class="form-group">
+                    <label>可预约时段 <span class="required">*</span></label>
+                    <div id="cfgSlots"></div>
+                    <button type="button" class="btn btn-sm btn-secondary" style="margin-top:10px;" onclick="addSlotRow()">➕ 添加时段</button>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('configModal')">取消</button>
+                    <button type="submit" class="btn btn-success">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<script>
+// ==================== 配置 ====================
+const ADMIN_PWD = 'admin123';
+let isAdmin = false;
+
+// ==================== 数据存储 ====================
+const DB = {
+    _get(key) { 
+        const d = localStorage.getItem(key); 
+        return d ? JSON.parse(d) : null; 
+    },
+    _set(key, val) { 
+        localStorage.setItem(key, JSON.stringify(val)); 
+    },
+    
+    getConfigs() {
+        let c = this._get('apt_config');
+        if (!c) {
+            c = [
+                { id:'1', name:'针灸理疗', days:10, slots:['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00'], capacity:3 },
+                { id:'2', name:'推拿按摩', days:7, slots:['09:00-10:00','10:00-11:00','14:00-15:00','15:00-16:00'], capacity:2 },
+                { id:'3', name:'康复训练', days:14, slots:['09:00-10:30','10:30-12:00','14:00-15:30','15:30-17:00'], capacity:5 },
+                { id:'4', name:'中药熏蒸', days:7, slots:['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00'], capacity:4 }
+            ];
+            this._set('apt_config', c);
+        }
+        return c;
+    },
+    saveConfigs(c) { this._set('apt_config', c); },
+    getConfigByName(n) { return this.getConfigs().find(x => x.name === n); },
+    
+    getRecords() { return this._get('apt_records') || []; },
+    saveRecords(r) { this._set('apt_records', r); },
+    
+    addRecord(r) {
+        const list = this.getRecords();
+        r.id = Date.now().toString();
+        r.createdAt = new Date().toISOString();
+        list.push(r);
+        this.saveRecords(list);
+        return r;
+    },
+    
+    countBooked(name, date, slot) {
+        return this.getRecords().filter(r => 
+            r.project === name && r.date === date && 
+            (slot ? r.slot === slot : true) && r.status !== 'cancelled'
+        ).length;
+    },
+    
+    canBook(name, date, slot) {
+        const cfg = this.getConfigByName(name);
+        if (!cfg) return { ok: false, msg: '项目不存在' };
+        const cnt = this.countBooked(name, date, slot);
+        const left = cfg.capacity - cnt;
+        return left > 0 ? { ok: true, left } : { ok: false, msg: '已约满', left: 0 };
+    },
+    
+    getAvailDates(name) {
+        const cfg = this.getConfigByName(name);
+        if (!cfg) return [];
+        const dates = [];
+        const today = new Date(); today.setHours(0,0,0,0);
+        for (let i = 0; i < cfg.days; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() + i);
+            dates.push(this.fmtDate(d));
+        }
+        return dates;
+    },
+    
+    fmtDate(d) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    },
+    getWeekday(s) {
+        return ['周日','周一','周二','周三','周四','周五','周六'][new Date(s).getDay()];
+    },
+    
+    clear() {
+        localStorage.removeItem('apt_config');
+        localStorage.removeItem('apt_records');
+    }
+};
+
+// ==================== 权限控制 ====================
+function checkAdmin() {
+    const p = new URLSearchParams(location.search);
+    if (p.get('admin') === '1' || sessionStorage.getItem('isAdmin') === '1') {
+        setAdmin();
+    }
+}
+
+function setAdmin() {
+    isAdmin = true;
+    document.body.classList.add('is-admin');
+    sessionStorage.setItem('isAdmin', '1');
+}
+
+function showLoginModal() {
+    document.getElementById('loginModal').classList.add('show');
+}
+
+function hideModal(id) {
+    document.getElementById(id).classList.remove('show');
+}
+
+function doLogin(e) {
+    e.preventDefault();
+    if (document.getElementById('inpPwd').value === ADMIN_PWD) {
+        setAdmin();
+        hideModal('loginModal');
+        document.getElementById('inpPwd').value = '';
+        alert('登录成功！');
+    } else {
+        alert('密码错误！');
+    }
+}
+
+// ==================== 页面切换 ====================
+function showPage(name, el) {
+    if (['records','config','share'].includes(name) && !isAdmin) {
+        showLoginModal();
+        return;
+    }
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    if (el) el.classList.add('active');
+    
+    if (name === 'booking') initBooking();
+    if (name === 'dashboard') initDashboard();
+    if (name === 'records') initRecords();
+    if (name === 'config') loadConfigTable();
+    if (name === 'share') initShare();
+}
+
+// ==================== 预约挂号 ====================
+let bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
+
+function initBooking() {
+    const sel = document.getElementById('selProject');
+    sel.innerHTML = '<option value="">请选择预约项目</option>';
+    DB.getConfigs().forEach(c => {
+        sel.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+    });
+    resetBooking();
+}
+
+document.getElementById('selProject').addEventListener('change', function() {
+    bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
+    document.getElementById('timeGroup').style.display = 'none';
+    document.querySelectorAll('#modeGroup .selection-item').forEach(x => x.classList.remove('selected'));
+    
+    if (this.value) {
+        bookState.project = this.value;
+        bookState.cfg = DB.getConfigByName(this.value);
+        document.getElementById('modeGroup').style.display = 'block';
+    }
+    checkSubmit();
+});
+
+function pickMode(mode) {
+    bookState.mode = mode;
+    bookState.date = null;
+    bookState.slot = null;
+    
+    document.querySelectorAll('#modeGroup .selection-item').forEach((x,i) => {
+        x.classList.toggle('selected', (mode==='date' && i===0) || (mode==='time' && i===1));
+    });
+    
+    if (mode === 'date') {
+        document.getElementById('dateGroup').style.display = 'block';
+        document.getElementById('timeGroup').style.display = 'none';
+        renderDates();
+    } else {
+        document.getElementById('timeGroup').style.display = 'block';
+        document.getElementById('dateGroup').style.display = 'none';
+        renderSlots();
+    }
+    checkSubmit();
+}
+
+function renderDates(filterSlot) {
+    const dates = DB.getAvailDates(bookState.project);
+    const cfg = bookState.cfg;
+    let html = '';
+    
+    dates.forEach(dt => {
+        const day = new Date(dt).getDate();
+        const wd = DB.getWeekday(dt);
+        const isToday = dt === DB.fmtDate(new Date());
+        
+        let avail = 0;
+        if (filterSlot) {
+            avail = cfg.capacity - DB.countBooked(bookState.project, dt, filterSlot);
+        } else {
+            cfg.slots.forEach(s => {
+                avail += cfg.capacity - DB.countBooked(bookState.project, dt, s);
+            });
+        }
+        
+        const full = avail <= 0;
+        const sel = bookState.date === dt;
+        
+        html += `<div class="selection-item ${full?'disabled':''} ${sel?'selected':''}" 
+                     onclick="${full?'':'pickDate(\''+dt+'\')'}">
+            <div class="date-day">${day}${isToday?'(今)':''}</div>
+            <div class="date-weekday">${wd}</div>
+            <div class="slot-remain">${full?'已约满':'余'+avail+'位'}</div>
+        </div>`;
+    });
+    document.getElementById('dateGrid').innerHTML = html;
+}
+
+function renderSlots(filterDate) {
+    const cfg = bookState.cfg;
+    let html = '';
+    
+    cfg.slots.forEach(s => {
+        let avail = 0;
+        if (filterDate) {
+            avail = cfg.capacity - DB.countBooked(bookState.project, filterDate, s);
+        } else {
+            DB.getAvailDates(bookState.project).forEach(dt => {
+                avail += cfg.capacity - DB.countBooked(bookState.project, dt, s);
+            });
+        }
+        
+        const full = avail <= 0;
+        const sel = bookState.slot === s;
+        
+        html += `<div class="selection-item ${full?'disabled':''} ${sel?'selected':''}" 
+                     onclick="${full?'':'pickSlot(\''+s+'\')'}">
+            <div>${s}</div>
+            <div class="slot-remain">${full?'已约满':'余'+avail+'位'}</div>
+        </div>`;
+    });
+    document.getElementById('timeGrid').innerHTML = html;
+}
+
+function pickDate(dt) {
+    bookState.date = dt;
+    if (bookState.mode === 'date') {
+        document.getElementById('timeGroup').style.display = 'block';
+        renderSlots(dt);
+    }
+    renderDates(bookState.mode === 'time' ? bookState.slot : null);
+    checkSubmit();
+}
+
+function pickSlot(s) {
+    bookState.slot = s;
+    if (bookState.mode === 'time') {
+        document.getElementById('dateGroup').style.display = 'block';
+        renderDates(s);
+    }
+    renderSlots(bookState.mode === 'date' ? bookState.date : null);
+    checkSubmit();
+}
+
+function checkSubmit() {
+    const name = document.getElementById('inpName').value.trim();
+    const phone = document.getElementById('inpPhone').value.trim();
+    const ok = name && phone && bookState.project && bookState.date && bookState.slot;
+    document.getElementById('btnSubmit').disabled = !ok;
+}
+
+document.getElementById('inpName').addEventListener('input', checkSubmit);
+document.getElementById('inpPhone').addEventListener('input', checkSubmit);
+
+document.getElementById('bookingForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const chk = DB.canBook(bookState.project, bookState.date, bookState.slot);
+    if (!chk.ok) {
+        alert('预约失败：' + chk.msg);
+        if (bookState.mode === 'date') renderSlots(bookState.date);
+        else renderDates(bookState.slot);
+        return;
+    }
+    
+    const rec = {
+        name: document.getElementById('inpName').value.trim(),
+        phone: document.getElementById('inpPhone').value.trim(),
+        project: bookState.project,
+        date: bookState.date,
+        slot: bookState.slot,
+        operator: document.getElementById('inpOperator').value.trim() || '自助预约',
+        remark: document.getElementById('inpRemark').value.trim(),
+        status: 'confirmed'
+    };
+    
+    const saved = DB.addRecord(rec);
+    
+    document.getElementById('cfmName').textContent = saved.name;
+    document.getElementById('cfmPhone').textContent = saved.phone;
+    document.getElementById('cfmProject').textContent = saved.project;
+    document.getElementById('cfmDate').textContent = saved.date + ' ' + DB.getWeekday(saved.date);
+    document.getElementById('cfmTime').textContent = saved.slot;
+    
+    document.getElementById('formCard').style.display = 'none';
+    document.getElementById('successCard').style.display = 'block';
+});
+
+function resetBooking() {
+    document.getElementById('bookingForm').reset();
+    bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
+    document.getElementById('timeGroup').style.display = 'none';
+    document.getElementById('formCard').style.display = 'block';
+    document.getElementById('successCard').style.display = 'none';
+    checkSubmit();
+}
+
+// ==================== 预约看板 ====================
+function initDashboard() {
+    document.getElementById('dashDate').value = DB.fmtDate(new Date());
+    
+    const allSlots = new Set();
+    DB.getConfigs().forEach(c => c.slots.forEach(s => allSlots.add(s)));
+    
+    const sel = document.getElementById('dashSlot');
+    sel.innerHTML = '<option value="">全部时段</option>';
+    Array.from(allSlots).sort().forEach(s => {
+        sel.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+    
+    loadDashboard();
+}
+
+function loadDashboard() {
+    const date = document.getElementById('dashDate').value;
+    const slot = document.getElementById('dashSlot').value;
+    
+    let html = '';
+    DB.getConfigs().forEach(cfg => {
+        const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
+        let total = 0, booked = 0;
+        
+        slotsChk.forEach(s => {
+            total += cfg.capacity;
+            booked += DB.countBooked(cfg.name, date, s);
+        });
+        
+        const avail = Math.max(0, total - booked);
+        const pct = total > 0 ? (booked / total * 100) : 0;
+        const full = avail === 0;
+        const pClass = pct >= 80 ? 'high' : (pct >= 50 ? 'medium' : 'low');
+        
+        let slotRows = '';
+        slotsChk.forEach(s => {
+            const b = DB.countBooked(cfg.name, date, s);
+            const r = cfg.capacity - b;
+            let sc = 'status-ok', st = '可预约';
+            if (r === 0) { sc = 'status-full'; st = '已满'; }
+            else if (r <= cfg.capacity * 0.3) { sc = 'status-warn'; st = '紧张'; }
+            slotRows += `<tr><td>${s}</td><td>${b}/${cfg.capacity}</td><td>${r}</td><td><span class="status-tag ${sc}">${st}</span></td></tr>`;
+        });
+        if (slotsChk.length === 0) slotRows = '<tr><td colspan="4" style="text-align:center;color:#999;">无此时段</td></tr>';
+        
+        html += `<div class="stat-card">
+            <div class="stat-header">
+                <span class="stat-title">${cfg.name}</span>
+                <span class="stat-badge ${full?'badge-full':'badge-ok'}">${full?'已约满':'可预约'}</span>
+            </div>
+            <div class="stat-numbers">
+                <div class="stat-num"><div class="stat-value">${total}</div><div class="stat-label">总名额</div></div>
+                <div class="stat-num"><div class="stat-value" style="color:#ff4d4f;">${booked}</div><div class="stat-label">已预约</div></div>
+                <div class="stat-num"><div class="stat-value" style="color:#52c41a;">${avail}</div><div class="stat-label">剩余</div></div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill ${pClass}" style="width:${pct}%"></div></div>
+            <table class="slot-table"><thead><tr><th>时段</th><th>已约</th><th>剩余</th><th>状态</th></tr></thead><tbody>${slotRows}</tbody></table>
+        </div>`;
+    });
+    
+    document.getElementById('dashStats').innerHTML = html;
+}
+
+document.getElementById('dashDate').addEventListener('change', loadDashboard);
+document.getElementById('dashSlot').addEventListener('change', loadDashboard);
+
+// ==================== 预约记录（管理员） ====================
+function initRecords() {
+    const today = new Date();
+    const ago = new Date(today); ago.setDate(ago.getDate() - 30);
+    document.getElementById('recStart').value = DB.fmtDate(ago);
+    document.getElementById('recEnd').value = DB.fmtDate(today);
+    
+    const sel = document.getElementById('recProject');
+    sel.innerHTML = '<option value="">全部项目</option>';
+    DB.getConfigs().forEach(c => {
+        sel.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+    });
+    
+    loadRecords();
+}
+
+function loadRecords() {
+    const start = document.getElementById('recStart').value;
+    const end = document.getElementById('recEnd').value;
+    const proj = document.getElementById('recProject').value;
+    const stat = document.getElementById('recStatus').value;
+    
+    let list = DB.getRecords().filter(r => {
+        if (start && r.date < start) return false;
+        if (end && r.date > end) return false;
+        if (proj && r.project !== proj) return false;
+        if (stat && r.status !== stat) return false;
+        return true;
+    });
+    
+    list.sort((a,b) => b.date.localeCompare(a.date) || a.slot.localeCompare(b.slot));
+    
+    // 概览
+    const confirmed = list.filter(r => r.status === 'confirmed').length;
+    const cancelled = list.filter(r => r.status === 'cancelled').length;
+    const todayCnt = list.filter(r => r.date === DB.fmtDate(new Date()) && r.status === 'confirmed').length;
+    
+    document.getElementById('recOverview').innerHTML = `
+        <div class="overview-card"><div class="overview-value">${list.length}</div><div class="overview-label">总记录</div></div>
+        <div class="overview-card"><div class="overview-value" style="color:#52c41a;">${confirmed}</div><div class="overview-label">已确认</div></div>
+        <div class="overview-card"><div class="overview-value" style="color:#ff4d4f;">${cancelled}</div><div class="overview-label">已取消</div></div>
+        <div class="overview-card"><div class="overview-value" style="color:#1890ff;">${todayCnt}</div><div class="overview-label">今日预约</div></div>
+    `;
+    
+    document.getElementById('recSubtitle').textContent = `${start || '-'} 至 ${end || '-'} 共 ${list.length} 条`;
+    
+    if (list.length === 0) {
+        document.getElementById('recTable').innerHTML = '<div class="empty-box"><h3>暂无记录</h3><p>当前筛选条件下没有预约记录</p></div>';
+        return;
+    }
+    
+    let html = `<table class="data-table"><thead><tr>
+        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>备注</th><th>状态</th><th>创建时间</th><th>操作</th>
+    </tr></thead><tbody>`;
+    
+    list.forEach(r => {
+        const sc = r.status === 'confirmed' ? 'status-ok' : 'status-full';
+        const st = r.status === 'confirmed' ? '已确认' : '已取消';
+        const ct = new Date(r.createdAt).toLocaleString('zh-CN');
+        html += `<tr>
+            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td>
+            <td>${r.operator||'-'}</td><td>${r.remark||'-'}</td>
+            <td><span class="status-tag ${sc}">${st}</span></td>
+            <td style="font-size:0.8rem;">${ct}</td>
+            <td>
+                <div class="btn-group">
+                    ${r.status==='confirmed'?`<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`:''}
+                    <button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('recTable').innerHTML = html;
+}
+
+function cancelRec(id) {
+    if (!confirm('确定取消此预约？')) return;
+    const list = DB.getRecords();
+    const idx = list.findIndex(r => r.id === id);
+    if (idx > -1) {
+        list[idx].status = 'cancelled';
+        list[idx].cancelledAt = new Date().toISOString();
+        DB.saveRecords(list);
+        loadRecords();
+    }
+}
+
+function deleteRec(id) {
+    if (!confirm('确定删除此记录？不可恢复！')) return;
+    DB.saveRecords(DB.getRecords().filter(r => r.id !== id));
+    loadRecords();
+}
+
+function exportExcel() {
+    const start = document.getElementById('recStart').value;
+    const end = document.getElementById('recEnd').value;
+    const proj = document.getElementById('recProject').value;
+    const stat = document.getElementById('recStatus').value;
+    
+    let list = DB.getRecords().filter(r => {
+        if (start && r.date < start) return false;
+        if (end && r.date > end) return false;
+        if (proj && r.project !== proj) return false;
+        if (stat && r.status !== stat) return false;
+        return true;
+    });
+    
+    if (list.length === 0) { alert('没有可导出的数据！'); return; }
+    
+    const data = list.map((r,i) => ({
+        '序号': i+1,
+        '顾客姓名': r.name,
+        '联系电话': r.phone,
+        '预约项目': r.project,
+        '预约日期': r.date,
+        '星期': DB.getWeekday(r.date),
+        '预约时段': r.slot,
+        '预约人': r.operator || '',
+        '备注': r.remark || '',
+        '状态': r.status === 'confirmed' ? '已确认' : '已取消',
+        '创建时间': new Date(r.createdAt).toLocaleString('zh-CN')
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:6},{wch:10},{wch:14},{wch:12},{wch:12},{wch:6},{wch:14},{wch:10},{wch:20},{wch:8},{wch:20}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '预约记录');
+    XLSX.writeFile(wb, `预约记录_${start||'all'}_${end||'all'}.xlsx`);
+}
+
+// ==================== 系统配置 ====================
+function loadConfigTable() {
+    const list = DB.getConfigs();
+    if (list.length === 0) {
+        document.getElementById('cfgTable').innerHTML = '<div class="empty-box"><h3>暂无配置</h3></div>';
+        return;
+    }
+    
+    let html = `<table class="data-table"><thead><tr><th>项目名称</th><th>可预约天数</th><th>时段容量</th><th>可预约时段</th><th>操作</th></tr></thead><tbody>`;
+    list.forEach(c => {
+        const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
+        html += `<tr>
+            <td><strong>${c.name}</strong></td>
+            <td>${c.days} 天</td>
+            <td>${c.capacity} 人/时段</td>
+            <td>${tags}</td>
+            <td>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" onclick="editConfig('${c.id}')">编辑</button>
+                    <button class="btn btn-danger btn-sm" onclick="delConfig('${c.id}')">删除</button>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('cfgTable').innerHTML = html;
+}
+
+function openConfigModal(cfg) {
+    document.getElementById('cfgModalTitle').textContent = cfg ? '编辑项目' : '添加项目';
+    document.getElementById('cfgId').value = cfg ? cfg.id : '';
+    document.getElementById('cfgName').value = cfg ? cfg.name : '';
+    document.getElementById('cfgDays').value = cfg ? cfg.days : '';
+    document.getElementById('cfgCapacity').value = cfg ? cfg.capacity : '';
+    
+    document.getElementById('cfgSlots').innerHTML = '';
+    if (cfg) {
+        cfg.slots.forEach(s => {
+            const [a,b] = s.split('-');
+            addSlotRow(a, b);
+        });
+    } else {
+        addSlotRow('09:00', '10:00');
+    }
+    
+    document.getElementById('configModal').classList.add('show');
+}
+
+function editConfig(id) {
+    const cfg = DB.getConfigs().find(c => c.id === id);
+    if (cfg) openConfigModal(cfg);
+}
+
+function addSlotRow(start, end) {
+    const div = document.createElement('div');
+    div.className = 'slot-row';
+    div.innerHTML = `
+        <input type="time" class="form-control" value="${start||''}" required>
+        <span>至</span>
+        <input type="time" class="form-control" value="${end||''}" required>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeSlotRow(this)">✕</button>
+    `;
+    document.getElementById('cfgSlots').appendChild(div);
+}
+
+function removeSlotRow(btn) {
+    const rows = document.querySelectorAll('#cfgSlots .slot-row');
+    if (rows.length > 1) btn.parentElement.remove();
+    else alert('至少保留一个时段');
+}
+
+function saveConfig(e) {
+    e.preventDefault();
+    const id = document.getElementById('cfgId').value;
+    const name = document.getElementById('cfgName').value.trim();
+    const days = parseInt(document.getElementById('cfgDays').value);
+    const capacity = parseInt(document.getElementById('cfgCapacity').value);
+    
+    const slots = [];
+    document.querySelectorAll('#cfgSlots .slot-row').forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        if (inputs[0].value && inputs[1].value) {
+            slots.push(inputs[0].value + '-' + inputs[1].value);
+        }
+    });
+    
+    if (slots.length === 0) { alert('请添加时段'); return; }
+    slots.sort();
+    
+    const list = DB.getConfigs();
+    if (id) {
+        const idx = list.findIndex(c => c.id === id);
+        if (idx > -1) list[idx] = { id, name, days, capacity, slots };
+    } else {
+        list.push({ id: Date.now().toString(), name, days, capacity, slots });
+    }
+    
+    DB.saveConfigs(list);
+    hideModal('configModal');
+    loadConfigTable();
+}
+
+function delConfig(id) {
+    if (!confirm('确定删除此配置？')) return;
+    DB.saveConfigs(DB.getConfigs().filter(c => c.id !== id));
+    loadConfigTable();
+}
+
+function exportAllData() {
+    const data = {
+        configs: DB.getConfigs(),
+        records: DB.getRecords(),
+        exportTime: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `预约系统备份_${DB.fmtDate(new Date())}.json`;
+    a.click();
+}
+
+function importAllData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        try {
+            const data = JSON.parse(ev.target.result);
+            if (!data.configs || !data.records) throw new Error('格式错误');
+            if (confirm('导入将覆盖现有数据，继续？')) {
+                DB.saveConfigs(data.configs);
+                DB.saveRecords(data.records);
+                loadConfigTable();
+                alert('导入成功！');
+            }
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+}
+
+function clearAllData() {
+    if (confirm('确定清除所有数据？不可恢复！')) {
+        if (confirm('再次确认！')) {
+            DB.clear();
+            loadConfigTable();
+            alert('已清除');
+        }
+    }
+}
+
+// ==================== 分享管理 ====================
+function initShare() {
+    const base = location.href.split('?')[0];
+    const userUrl = base;
+    const adminUrl = base + '?admin=1';
+    
+    document.getElementById('userLink').value = userUrl;
+    document.getElementById('adminLink').value = adminUrl;
+    
+    // 生成二维码（使用简单的API）
+    const qrDiv = document.getElementById('qrcode');
+    qrDiv.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(userUrl)}" alt="二维码" style="display:block;">`;
+}
+
+function copyLink(id) {
+    const inp = document.getElementById(id);
+    inp.select();
+    document.execCommand('copy');
+    alert('已复制到剪贴板！');
+}
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', function() {
+    checkAdmin();
+    initBooking();
+});
+</script>
+</body>
+</html>
