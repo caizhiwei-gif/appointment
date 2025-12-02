@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统</title>
+    <title>治疗预约系统</title>
+    <!-- LeanCloud SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.2/dist/av-min.js"></script>
+    <!-- Excel导出 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,6 +29,28 @@
             color: var(--text);
         }
         
+        /* 加载遮罩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loading-overlay.hide { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--bg);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 15px; color: var(--text2); }
+        
         .login-page {
             min-height: 100vh;
             display: flex;
@@ -44,6 +69,15 @@
         .login-header { text-align: center; margin-bottom: 30px; }
         .login-header h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 8px; }
         .login-header p { color: var(--text2); }
+        .cloud-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #52c41a, #73d13d);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+        }
         
         .app-container { display: none; padding: 20px; }
         .app-container.show { display: block; }
@@ -144,24 +178,11 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(74,144,217,0.1);
         }
-        /* 输入框验证状态样式 */
-        .form-control.valid {
-            border-color: var(--success);
-        }
-        .form-control.invalid {
-            border-color: var(--danger);
-        }
-        .form-hint {
-            font-size: 0.75rem;
-            margin-top: 4px;
-            color: var(--text2);
-        }
-        .form-hint.error {
-            color: var(--danger);
-        }
-        .form-hint.success {
-            color: var(--success);
-        }
+        .form-control.valid { border-color: var(--success); }
+        .form-control.invalid { border-color: var(--danger); }
+        .form-hint { font-size: 0.75rem; margin-top: 4px; color: var(--text2); }
+        .form-hint.error { color: var(--danger); }
+        .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
         
         .sel-grid {
@@ -422,12 +443,19 @@
 </head>
 <body>
 
+<!-- 加载遮罩 -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text">正在连接云端...</div>
+</div>
+
 <!-- 登录页面 -->
-<div class="login-page" id="loginPage">
+<div class="login-page" id="loginPage" style="display:none;">
     <div class="login-box">
         <div class="login-header">
-            <h1>🏥 画美线上预约系统</h1>
+            <h1>🏥 治疗预约系统</h1>
             <p>请登录以继续</p>
+            <div class="cloud-badge">☁️ 云端数据同步</div>
         </div>
         <form onsubmit="doLogin(event)">
             <div class="form-group">
@@ -438,10 +466,11 @@
                 <label>密码</label>
                 <input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空">
             </div>
-            <button type="submit" class="btn btn-primary btn-full">登 录</button>
+            <button type="submit" class="btn btn-primary btn-full" id="loginBtn">登 录</button>
         </form>
         <p style="text-align:center;color:var(--text2);font-size:0.75rem;margin-top:15px;">
-
+            首次使用会自动创建超管账号<br>
+            superadmin / super123
         </p>
     </div>
 </div>
@@ -450,7 +479,7 @@
 <div class="app-container" id="appContainer">
     <nav class="navbar">
         <div class="navbar-brand">
-            <h1>🏥 画美线上预约系统</h1>
+            <h1>🏥 治疗预约系统</h1>
             <span class="role-badge" id="navRoleBadge"></span>
         </div>
         <div class="nav-links" id="navLinks">
@@ -483,10 +512,7 @@
                     </div>
                     <div class="form-group">
                         <label>联系电话 <span class="required">*</span></label>
-                        <input type="tel" class="form-control" id="inpPhone" 
-                               placeholder="请输入11位手机号码" 
-                               maxlength="11"
-                               required>
+                        <input type="tel" class="form-control" id="inpPhone" placeholder="请输入11位手机号码" maxlength="11" required>
                         <div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div>
                     </div>
                     <div class="form-group">
@@ -569,7 +595,6 @@
             <div class="tip-box" id="operatorTip" style="display:none;">
                 💡 您当前是预约人员身份，只能查看自己创建的预约记录
             </div>
-            
             <div class="overview-row" id="recOverview"></div>
             <div class="filter-bar">
                 <div class="filter-item">
@@ -626,18 +651,6 @@
                 </div>
                 <div class="tbl-wrap" id="cfgTable"></div>
             </div>
-            <div class="card" data-perm="cleardata">
-                <div class="card-header">
-                    <h2>🗄️ 数据管理</h2>
-                    <p>导出、导入或清除系统数据</p>
-                </div>
-                <div class="btn-group">
-                    <button class="btn btn-primary" onclick="exportAllData()">📤 导出数据</button>
-                    <button class="btn btn-primary" onclick="document.getElementById('fileImport').click()">📥 导入数据</button>
-                    <input type="file" id="fileImport" accept=".json" style="display:none" onchange="importAllData(event)">
-                    <button class="btn btn-danger" onclick="clearRecordsData()">🗑️ 清除预约记录</button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -677,28 +690,6 @@
                     <input type="file" id="fileUserImport" accept=".xlsx,.xls" style="display:none" onchange="importUsers(event)">
                 </div>
                 <div class="tbl-wrap" id="userTable"></div>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <h2>🔐 角色权限说明</h2>
-                </div>
-                <table class="data-tbl">
-                    <thead><tr><th>权限</th><th>超级管理员</th><th>管理员</th><th>预约人员</th></tr></thead>
-                    <tbody>
-                        <tr><td>预约挂号</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                        <tr><td>预约看板</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                        <tr><td>预约记录（全部）</td><td>✅</td><td>✅</td><td>❌ 仅自己</td></tr>
-                        <tr><td>确认/取消预约</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                        <tr><td>删除记录</td><td>✅</td><td>❌</td><td>❌</td></tr>
-                        <tr><td>批量删除</td><td>✅</td><td>❌</td><td>❌</td></tr>
-                        <tr><td>导出Excel</td><td>✅</td><td>❌</td><td>❌</td></tr>
-                        <tr><td>系统配置</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                        <tr><td>清除数据</td><td>✅</td><td>❌</td><td>❌</td></tr>
-                        <tr><td>分享管理</td><td>✅</td><td>✅</td><td>❌</td></tr>
-                        <tr><td>用户管理</td><td>✅</td><td>❌</td><td>❌</td></tr>
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
@@ -796,120 +787,160 @@
 </div>
 
 <script>
+// ==================== LeanCloud 初始化 ====================
+AV.init({
+    appId: "YJxnbplZZ54wic7X5mzG8ywE-gzGzoHsz",
+    appKey: "XIXnl8r71cmH0qFt2R0vGgBh",
+    serverURL: "https://yjxnbplz.lc-cn-n1-shared.com"
+});
+
 // ==================== 全局状态 ====================
 let currentUser = null;
 let superPwdCallback = null;
+let cachedConfigs = [];
+let cachedRecords = [];
 
 const ROLE_NAMES = { superadmin: '超级管理员', admin: '管理员', operator: '预约人员' };
-
 const PERMS = {
     superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','cleardata','confirm','cancel'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
     operator: ['booking','dashboard','records']
 };
 
-// ==================== 手机号验证 ====================
-/**
- * 验证中国大陆手机号
- * 规则：
- * 1. 必须是11位数字
- * 2. 第一位必须是1
- * 3. 第二位是3-9
- */
+// ==================== 工具函数 ====================
+function showLoading(text = '加载中...') {
+    document.getElementById('loadingOverlay').classList.remove('hide');
+    document.querySelector('.loading-text').textContent = text;
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.add('hide');
+}
+
+function fmtDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function getWeekday(s) {
+    return ['日','一','二','三','四','五','六'][new Date(s).getDay()];
+}
+
 function isValidPhone(phone) {
-    const regex = /^1[3-9]\d{9}$/;
-    return regex.test(phone);
+    return /^1[3-9]\d{9}$/.test(phone);
 }
 
-/**
- * 获取手机号验证状态和提示
- */
 function getPhoneStatus(phone) {
-    if (!phone) {
-        return { valid: false, msg: '请输入11位中国大陆手机号码', class: '' };
-    }
-    
-    // 去除空格和其他字符
+    if (!phone) return { valid: false, msg: '请输入11位中国大陆手机号码', class: '' };
     phone = phone.replace(/\s/g, '');
-    
-    if (!/^\d+$/.test(phone)) {
-        return { valid: false, msg: '❌ 手机号只能包含数字', class: 'error' };
-    }
-    
-    if (phone.length < 11) {
-        return { valid: false, msg: `❌ 请继续输入，还需要${11 - phone.length}位数字`, class: 'error' };
-    }
-    
-    if (phone.length > 11) {
-        return { valid: false, msg: '❌ 手机号不能超过11位', class: 'error' };
-    }
-    
-    if (phone[0] !== '1') {
-        return { valid: false, msg: '❌ 手机号必须以1开头', class: 'error' };
-    }
-    
-    if (!/[3-9]/.test(phone[1])) {
-        return { valid: false, msg: '❌ 手机号第二位必须是3-9', class: 'error' };
-    }
-    
-    if (isValidPhone(phone)) {
-        return { valid: true, msg: '✅ 手机号格式正确', class: 'success' };
-    }
-    
-    return { valid: false, msg: '❌ 手机号格式不正确', class: 'error' };
+    if (!/^\d+$/.test(phone)) return { valid: false, msg: '❌ 手机号只能包含数字', class: 'error' };
+    if (phone.length < 11) return { valid: false, msg: `❌ 还需要${11 - phone.length}位数字`, class: 'error' };
+    if (phone.length > 11) return { valid: false, msg: '❌ 手机号不能超过11位', class: 'error' };
+    if (phone[0] !== '1') return { valid: false, msg: '❌ 必须以1开头', class: 'error' };
+    if (!/[3-9]/.test(phone[1])) return { valid: false, msg: '❌ 第二位必须是3-9', class: 'error' };
+    if (isValidPhone(phone)) return { valid: true, msg: '✅ 格式正确', class: 'success' };
+    return { valid: false, msg: '❌ 格式不正确', class: 'error' };
 }
 
-// ==================== 数据存储 ====================
+// ==================== 云数据库操作 ====================
 const DB = {
-    _get(k) { const d = localStorage.getItem(k); return d ? JSON.parse(d) : null; },
-    _set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
-    
-    getUsers() {
-        let u = this._get('apt_users');
-        if (!u) {
-            u = [
-                { id:'1', username:'superadmin', password:'super123', name:'超级管理员', role:'superadmin' },
-                { id:'2', username:'admin', password:'admin123', name:'管理员', role:'admin' },
-                { id:'3', username:'user1', password:'', name:'预约员1', role:'operator' }
-            ];
-            this._set('apt_users', u);
-        }
-        return u;
+    // 用户相关
+    async getUsers() {
+        const query = new AV.Query('AppUser');
+        query.limit(1000);
+        const results = await query.find();
+        return results.map(r => ({ id: r.id, ...r.toJSON() }));
     },
-    saveUsers(u) { this._set('apt_users', u); },
     
-    getConfigs() {
-        let c = this._get('apt_config');
-        if (!c) {
-            c = [
-                { id:'1', name:'针灸理疗', days:10, slots:['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00'], capacity:3 },
-                { id:'2', name:'推拿按摩', days:7, slots:['09:00-10:00','10:00-11:00','14:00-15:00','15:00-16:00'], capacity:2 },
-                { id:'3', name:'康复训练', days:14, slots:['09:00-10:30','10:30-12:00','14:00-15:30','15:30-17:00'], capacity:5 }
-            ];
-            this._set('apt_config', c);
-        }
-        return c;
+    async addUser(data) {
+        const AppUser = AV.Object.extend('AppUser');
+        const user = new AppUser();
+        Object.keys(data).forEach(k => user.set(k, data[k]));
+        const saved = await user.save();
+        return { id: saved.id, ...saved.toJSON() };
     },
-    saveConfigs(c) { this._set('apt_config', c); },
-    getCfgByName(n) { return this.getConfigs().find(x => x.name === n); },
     
-    getRecords() { return this._get('apt_records') || []; },
-    saveRecords(r) { this._set('apt_records', r); },
+    async updateUser(id, data) {
+        const user = AV.Object.createWithoutData('AppUser', id);
+        Object.keys(data).forEach(k => user.set(k, data[k]));
+        await user.save();
+    },
     
-    addRecord(r) {
-        const list = this.getRecords();
-        r.id = Date.now().toString();
-        r.createdAt = new Date().toISOString();
-        r.createdBy = currentUser.username;
-        r.createdByName = currentUser.name;
-        r.createdByRole = currentUser.role;
-        list.push(r);
-        this.saveRecords(list);
-        return r;
+    async deleteUser(id) {
+        const user = AV.Object.createWithoutData('AppUser', id);
+        await user.destroy();
+    },
+    
+    // 配置相关
+    async getConfigs() {
+        const query = new AV.Query('Config');
+        query.limit(1000);
+        const results = await query.find();
+        cachedConfigs = results.map(r => ({ id: r.id, ...r.toJSON() }));
+        return cachedConfigs;
+    },
+    
+    async addConfig(data) {
+        const Config = AV.Object.extend('Config');
+        const config = new Config();
+        Object.keys(data).forEach(k => config.set(k, data[k]));
+        const saved = await config.save();
+        return { id: saved.id, ...saved.toJSON() };
+    },
+    
+    async updateConfig(id, data) {
+        const config = AV.Object.createWithoutData('Config', id);
+        Object.keys(data).forEach(k => config.set(k, data[k]));
+        await config.save();
+    },
+    
+    async deleteConfig(id) {
+        const config = AV.Object.createWithoutData('Config', id);
+        await config.destroy();
+    },
+    
+    getCfgByName(name) {
+        return cachedConfigs.find(c => c.name === name);
+    },
+    
+    // 记录相关
+    async getRecords() {
+        const query = new AV.Query('Record');
+        query.limit(1000);
+        query.descending('createdAt');
+        const results = await query.find();
+        cachedRecords = results.map(r => ({ id: r.id, ...r.toJSON() }));
+        return cachedRecords;
+    },
+    
+    async addRecord(data) {
+        const Record = AV.Object.extend('Record');
+        const record = new Record();
+        Object.keys(data).forEach(k => record.set(k, data[k]));
+        record.set('createdBy', currentUser.username);
+        record.set('createdByName', currentUser.name);
+        record.set('createdByRole', currentUser.role);
+        const saved = await record.save();
+        return { id: saved.id, ...saved.toJSON() };
+    },
+    
+    async updateRecord(id, data) {
+        const record = AV.Object.createWithoutData('Record', id);
+        Object.keys(data).forEach(k => record.set(k, data[k]));
+        await record.save();
+    },
+    
+    async deleteRecord(id) {
+        const record = AV.Object.createWithoutData('Record', id);
+        await record.destroy();
+    },
+    
+    async deleteRecords(ids) {
+        const objects = ids.map(id => AV.Object.createWithoutData('Record', id));
+        await AV.Object.destroyAll(objects);
     },
     
     countBooked(name, date, slot) {
-        return this.getRecords().filter(r => 
+        return cachedRecords.filter(r => 
             r.project === name && r.date === date && 
             (slot ? r.slot === slot : true) && r.status !== 'cancelled'
         ).length;
@@ -931,20 +962,58 @@ const DB = {
         for (let i = 0; i < cfg.days; i++) {
             const d = new Date(today);
             d.setDate(d.getDate() + i);
-            dates.push(this.fmtDate(d));
+            dates.push(fmtDate(d));
         }
         return dates;
-    },
-    
-    fmtDate(d) {
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    },
-    getWeekday(s) {
-        return ['日','一','二','三','四','五','六'][new Date(s).getDay()];
     }
 };
 
-// ==================== 权限检查 ====================
+// ==================== 初始化 ====================
+async function initApp() {
+    showLoading('正在连接云端...');
+    try {
+        // 检查是否有用户，没有则创建默认超管
+        const users = await DB.getUsers();
+        if (users.length === 0) {
+            showLoading('初始化系统...');
+            await DB.addUser({ username: 'superadmin', password: 'super123', name: '超级管理员', role: 'superadmin' });
+            await DB.addUser({ username: 'admin', password: 'admin123', name: '管理员', role: 'admin' });
+            await DB.addUser({ username: 'user1', password: '', name: '预约员1', role: 'operator' });
+        }
+        
+        // 检查是否有配置
+        const configs = await DB.getConfigs();
+        if (configs.length === 0) {
+            showLoading('初始化默认配置...');
+            await DB.addConfig({ name: '针灸理疗', days: 10, slots: ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00'], capacity: 3 });
+            await DB.addConfig({ name: '推拿按摩', days: 7, slots: ['09:00-10:00','10:00-11:00','14:00-15:00','15:00-16:00'], capacity: 2 });
+            await DB.addConfig({ name: '康复训练', days: 14, slots: ['09:00-10:30','10:30-12:00','14:00-15:30','15:30-17:00'], capacity: 5 });
+            await DB.getConfigs(); // 刷新缓存
+        }
+        
+        // 加载记录
+        await DB.getRecords();
+        
+        hideLoading();
+        document.getElementById('loginPage').style.display = 'flex';
+        
+        // 检查会话
+        const saved = sessionStorage.getItem('currentUser');
+        if (saved) {
+            currentUser = JSON.parse(saved);
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('appContainer').classList.add('show');
+            applyPerms();
+            await initBooking();
+        }
+    } catch (err) {
+        hideLoading();
+        alert('连接云端失败: ' + err.message);
+        console.error(err);
+    }
+}
+
+// ==================== 权限 ====================
 function hasPerm(perm) {
     if (!currentUser) return false;
     return PERMS[currentUser.role]?.includes(perm) || false;
@@ -952,42 +1021,51 @@ function hasPerm(perm) {
 
 function applyPerms() {
     document.querySelectorAll('[data-perm]').forEach(el => {
-        const perm = el.dataset.perm;
-        el.classList.toggle('perm-hide', !hasPerm(perm));
+        el.classList.toggle('perm-hide', !hasPerm(el.dataset.perm));
     });
-    
     const badge = document.getElementById('navRoleBadge');
     badge.textContent = ROLE_NAMES[currentUser.role];
     badge.className = 'role-badge role-' + currentUser.role;
     document.getElementById('navUserName').textContent = currentUser.name;
-    
     document.getElementById('operatorTip').style.display = currentUser.role === 'operator' ? 'block' : 'none';
 }
 
 // ==================== 登录登出 ====================
-function doLogin(e) {
+async function doLogin(e) {
     e.preventDefault();
-    const username = document.getElementById('loginUser').value.trim();
-    const pwd = document.getElementById('loginPwd').value;
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.textContent = '登录中...';
     
-    const users = DB.getUsers();
-    const user = users.find(u => u.username === username);
-    
-    if (!user) { alert('用户不存在！'); return; }
-    
-    if (user.role === 'operator' && !user.password) {
-    } else if (user.password !== pwd) {
-        alert('密码错误！'); return;
+    try {
+        const username = document.getElementById('loginUser').value.trim();
+        const pwd = document.getElementById('loginPwd').value;
+        
+        const users = await DB.getUsers();
+        const user = users.find(u => u.username === username);
+        
+        if (!user) { alert('用户不存在！'); return; }
+        
+        if (user.role === 'operator' && !user.password) {
+            // 无密码可登录
+        } else if (user.password !== pwd) {
+            alert('密码错误！'); return;
+        }
+        
+        currentUser = user;
+        sessionStorage.setItem('currentUser', JSON.stringify(user));
+        
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('appContainer').classList.add('show');
+        
+        applyPerms();
+        await initBooking();
+    } catch (err) {
+        alert('登录失败: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '登 录';
     }
-    
-    currentUser = user;
-    sessionStorage.setItem('currentUser', JSON.stringify(user));
-    
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('appContainer').classList.add('show');
-    
-    applyPerms();
-    initBooking();
 }
 
 function doLogout() {
@@ -999,28 +1077,18 @@ function doLogout() {
     document.getElementById('loginPwd').value = '';
 }
 
-function checkSession() {
-    const saved = sessionStorage.getItem('currentUser');
-    if (saved) {
-        currentUser = JSON.parse(saved);
-        document.getElementById('loginPage').style.display = 'none';
-        document.getElementById('appContainer').classList.add('show');
-        applyPerms();
-        initBooking();
-    }
-}
-
 // ==================== 超管验证 ====================
-function requireSuperPwd(callback) {
+async function requireSuperPwd(callback) {
     superPwdCallback = callback;
     document.getElementById('superPwdInput').value = '';
     document.getElementById('superPwdModal').classList.add('show');
 }
 
-function verifySuperPwd(e) {
+async function verifySuperPwd(e) {
     e.preventDefault();
     const pwd = document.getElementById('superPwdInput').value;
-    const superUsers = DB.getUsers().filter(u => u.role === 'superadmin');
+    const users = await DB.getUsers();
+    const superUsers = users.filter(u => u.role === 'superadmin');
     const valid = superUsers.some(u => u.password === pwd);
     
     if (valid) {
@@ -1032,10 +1100,9 @@ function verifySuperPwd(e) {
 }
 
 // ==================== 页面切换 ====================
-function showPage(name, el) {
+async function showPage(name, el) {
     if (!hasPerm(name) && !['booking','dashboard','records'].includes(name)) {
-        alert('您没有权限访问此页面！');
-        return;
+        alert('您没有权限！'); return;
     }
     
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1043,12 +1110,17 @@ function showPage(name, el) {
     document.getElementById('page-' + name).classList.add('active');
     if (el) el.classList.add('active');
     
-    if (name === 'booking') initBooking();
-    if (name === 'dashboard') initDashboard();
-    if (name === 'records') initRecords();
-    if (name === 'config') loadCfgTable();
-    if (name === 'share') initShare();
-    if (name === 'users') loadUserTable();
+    showLoading('加载数据...');
+    try {
+        if (name === 'booking') await initBooking();
+        if (name === 'dashboard') await initDashboard();
+        if (name === 'records') await initRecords();
+        if (name === 'config') await loadCfgTable();
+        if (name === 'share') initShare();
+        if (name === 'users') await loadUserTable();
+    } finally {
+        hideLoading();
+    }
 }
 
 function hideModal(id) { document.getElementById(id).classList.remove('show'); }
@@ -1056,14 +1128,17 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 // ==================== 预约挂号 ====================
 let bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
 
-function initBooking() {
+async function initBooking() {
+    await DB.getConfigs();
+    await DB.getRecords();
+    
     const sel = document.getElementById('selProject');
     sel.innerHTML = '<option value="">请选择预约项目</option>';
-    DB.getConfigs().forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
+    cachedConfigs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
     resetBooking();
 }
 
-document.getElementById('selProject').addEventListener('change', function() {
+document.getElementById('selProject').addEventListener('change', async function() {
     bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
     document.getElementById('modeGroup').style.display = 'none';
     document.getElementById('dateGroup').style.display = 'none';
@@ -1106,8 +1181,8 @@ function renderDates(filterSlot) {
     
     dates.forEach(dt => {
         const day = new Date(dt).getDate();
-        const wd = DB.getWeekday(dt);
-        const isToday = dt === DB.fmtDate(new Date());
+        const wd = getWeekday(dt);
+        const isToday = dt === fmtDate(new Date());
         
         let avail = 0;
         if (filterSlot) {
@@ -1171,104 +1246,92 @@ function pickSlot(s) {
     checkSubmit();
 }
 
-// ★★★ 修改后的提交验证函数 ★★★
 function checkSubmit() {
     const name = document.getElementById('inpName').value.trim();
     const phone = document.getElementById('inpPhone').value.trim();
     const phoneInput = document.getElementById('inpPhone');
     const phoneHint = document.getElementById('phoneHint');
+    const nameInput = document.getElementById('inpName');
+    const nameHint = document.getElementById('nameHint');
     
-    // 验证手机号
     const phoneStatus = getPhoneStatus(phone);
-    
-    // 更新手机号输入框样式
     phoneInput.classList.remove('valid', 'invalid');
     phoneHint.classList.remove('error', 'success');
-    
     if (phone) {
-        if (phoneStatus.valid) {
-            phoneInput.classList.add('valid');
-            phoneHint.classList.add('success');
-        } else {
-            phoneInput.classList.add('invalid');
-            phoneHint.classList.add('error');
-        }
+        phoneInput.classList.add(phoneStatus.valid ? 'valid' : 'invalid');
+        phoneHint.classList.add(phoneStatus.class);
     }
     phoneHint.textContent = phoneStatus.msg;
     
-    // 验证姓名
-    const nameInput = document.getElementById('inpName');
-    const nameHint = document.getElementById('nameHint');
     nameInput.classList.remove('valid', 'invalid');
     nameHint.classList.remove('error', 'success');
-    
     if (name) {
         if (name.length >= 2) {
             nameInput.classList.add('valid');
-            nameHint.textContent = '✅ 姓名格式正确';
+            nameHint.textContent = '✅ 姓名正确';
             nameHint.classList.add('success');
         } else {
             nameInput.classList.add('invalid');
-            nameHint.textContent = '❌ 姓名至少需要2个字符';
+            nameHint.textContent = '❌ 至少2个字符';
             nameHint.classList.add('error');
         }
     } else {
         nameHint.textContent = '';
     }
     
-    // 检查所有条件
-    const canSubmit = name && name.length >= 2 && 
-                      phoneStatus.valid && 
-                      bookState.project && 
-                      bookState.date && 
-                      bookState.slot;
-    
+    const canSubmit = name && name.length >= 2 && phoneStatus.valid && bookState.project && bookState.date && bookState.slot;
     document.getElementById('btnSubmit').disabled = !canSubmit;
 }
 
 document.getElementById('inpName').addEventListener('input', checkSubmit);
 document.getElementById('inpPhone').addEventListener('input', function() {
-    // 只允许输入数字
     this.value = this.value.replace(/[^\d]/g, '');
     checkSubmit();
 });
 
-document.getElementById('bookingForm').addEventListener('submit', function(e) {
+document.getElementById('bookingForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const phone = document.getElementById('inpPhone').value.trim();
-    
-    // 再次验证手机号
     if (!isValidPhone(phone)) {
-        alert('请输入正确的11位中国大陆手机号码！');
-        document.getElementById('inpPhone').focus();
+        alert('请输入正确的手机号！');
         return;
     }
+    
+    // 刷新数据确保最新
+    await DB.getRecords();
     
     const chk = DB.canBook(bookState.project, bookState.date, bookState.slot);
     if (!chk.ok) { alert('预约失败：' + chk.msg); return; }
     
-    const rec = {
-        name: document.getElementById('inpName').value.trim(),
-        phone: phone,
-        project: bookState.project,
-        date: bookState.date,
-        slot: bookState.slot,
-        operator: document.getElementById('inpOperator').value.trim() || currentUser.name,
-        remark: document.getElementById('inpRemark').value.trim(),
-        status: 'confirmed'
-    };
-    
-    const saved = DB.addRecord(rec);
-    
-    document.getElementById('cfmName').textContent = saved.name;
-    document.getElementById('cfmPhone').textContent = saved.phone;
-    document.getElementById('cfmProject').textContent = saved.project;
-    document.getElementById('cfmDate').textContent = saved.date + ' 周' + DB.getWeekday(saved.date);
-    document.getElementById('cfmTime').textContent = saved.slot;
-    
-    document.getElementById('formCard').style.display = 'none';
-    document.getElementById('successCard').style.display = 'block';
+    showLoading('正在提交...');
+    try {
+        const saved = await DB.addRecord({
+            name: document.getElementById('inpName').value.trim(),
+            phone: phone,
+            project: bookState.project,
+            date: bookState.date,
+            slot: bookState.slot,
+            operator: document.getElementById('inpOperator').value.trim() || currentUser.name,
+            remark: document.getElementById('inpRemark').value.trim(),
+            status: 'confirmed'
+        });
+        
+        await DB.getRecords(); // 刷新缓存
+        
+        document.getElementById('cfmName').textContent = saved.name;
+        document.getElementById('cfmPhone').textContent = saved.phone;
+        document.getElementById('cfmProject').textContent = saved.project;
+        document.getElementById('cfmDate').textContent = saved.date + ' 周' + getWeekday(saved.date);
+        document.getElementById('cfmTime').textContent = saved.slot;
+        
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('successCard').style.display = 'block';
+    } catch (err) {
+        alert('提交失败: ' + err.message);
+    } finally {
+        hideLoading();
+    }
 });
 
 function resetBooking() {
@@ -1279,23 +1342,21 @@ function resetBooking() {
     document.getElementById('timeGroup').style.display = 'none';
     document.getElementById('formCard').style.display = 'block';
     document.getElementById('successCard').style.display = 'none';
-    
-    // 重置输入框样式
     document.getElementById('inpName').classList.remove('valid', 'invalid');
     document.getElementById('inpPhone').classList.remove('valid', 'invalid');
     document.getElementById('nameHint').textContent = '';
-    document.getElementById('nameHint').classList.remove('error', 'success');
     document.getElementById('phoneHint').textContent = '请输入11位中国大陆手机号码';
-    document.getElementById('phoneHint').classList.remove('error', 'success');
-    
     checkSubmit();
 }
 
 // ==================== 预约看板 ====================
-function initDashboard() {
-    document.getElementById('dashDate').value = DB.fmtDate(new Date());
+async function initDashboard() {
+    await DB.getConfigs();
+    await DB.getRecords();
+    
+    document.getElementById('dashDate').value = fmtDate(new Date());
     const allSlots = new Set();
-    DB.getConfigs().forEach(c => c.slots.forEach(s => allSlots.add(s)));
+    cachedConfigs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
     const sel = document.getElementById('dashSlot');
     sel.innerHTML = '<option value="">全部时段</option>';
     Array.from(allSlots).sort().forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
@@ -1307,7 +1368,7 @@ function loadDashboard() {
     const slot = document.getElementById('dashSlot').value;
     
     let html = '';
-    DB.getConfigs().forEach(cfg => {
+    cachedConfigs.forEach(cfg => {
         const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
         let total = 0, booked = 0;
         slotsChk.forEach(s => { total += cfg.capacity; booked += DB.countBooked(cfg.name, date, s); });
@@ -1329,10 +1390,7 @@ function loadDashboard() {
         if (slotsChk.length === 0) slotRows = '<tr><td colspan="4" style="text-align:center;color:#999;">无此时段</td></tr>';
         
         html += `<div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-title">${cfg.name}</span>
-                <span class="stat-badge ${full?'badge-full':'badge-ok'}">${full?'已满':'可约'}</span>
-            </div>
+            <div class="stat-header"><span class="stat-title">${cfg.name}</span><span class="stat-badge ${full?'badge-full':'badge-ok'}">${full?'已满':'可约'}</span></div>
             <div class="stat-nums">
                 <div class="stat-num"><div class="stat-val">${total}</div><div class="stat-lbl">总额</div></div>
                 <div class="stat-num"><div class="stat-val" style="color:var(--danger);">${booked}</div><div class="stat-lbl">已约</div></div>
@@ -1349,15 +1407,18 @@ document.getElementById('dashDate').addEventListener('change', loadDashboard);
 document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
 // ==================== 预约记录 ====================
-function initRecords() {
+async function initRecords() {
+    await DB.getConfigs();
+    await DB.getRecords();
+    
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
-    document.getElementById('recStart').value = DB.fmtDate(ago);
-    document.getElementById('recEnd').value = DB.fmtDate(today);
+    document.getElementById('recStart').value = fmtDate(ago);
+    document.getElementById('recEnd').value = fmtDate(today);
     
     const sel = document.getElementById('recProject');
     sel.innerHTML = '<option value="">全部</option>';
-    DB.getConfigs().forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
+    cachedConfigs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
     
     loadRecords();
 }
@@ -1368,7 +1429,7 @@ function loadRecords() {
     const proj = document.getElementById('recProject').value;
     const stat = document.getElementById('recStatus').value;
     
-    let list = DB.getRecords().filter(r => {
+    let list = cachedRecords.filter(r => {
         if (start && r.date < start) return false;
         if (end && r.date > end) return false;
         if (proj && r.project !== proj) return false;
@@ -1393,7 +1454,7 @@ function loadRecords() {
         <div class="overview-card"><div class="overview-val" style="color:var(--danger);">${cancelled}</div><div class="overview-lbl">已取消</div></div>
     `;
     
-    const tipText = currentUser.role === 'operator' ? '（仅显示您创建的记录）' : '';
+    const tipText = currentUser.role === 'operator' ? '（仅显示您的记录）' : '';
     document.getElementById('recSubtitle').textContent = `${start || '-'} 至 ${end || '-'} 共 ${list.length} 条${tipText}`;
     
     if (list.length === 0) {
@@ -1407,18 +1468,16 @@ function loadRecords() {
     
     let html = `<table class="data-tbl"><thead><tr>
         ${canDel ? '<th class="checkbox-col"><input type="checkbox" class="cb-input" onchange="toggleAllCb(this)"></th>' : ''}
-        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>备注</th><th>状态</th><th>创建账户</th><th>创建时间</th><th>操作</th>
+        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>状态</th><th>创建账户</th><th>创建时间</th><th>操作</th>
     </tr></thead><tbody>`;
     
     list.forEach(r => {
         const statMap = { confirmed: ['st-pending','待确认'], success: ['st-success','预约成功'], cancelled: ['st-cancel','已取消'] };
         const [sc, st] = statMap[r.status] || ['',''];
-        const ct = new Date(r.createdAt).toLocaleString('zh-CN');
-        
+        const ct = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN') : '-';
         const creatorName = r.createdByName || r.operator || '-';
         const creatorRole = r.createdByRole || 'operator';
-        const creatorRoleName = ROLE_NAMES[creatorRole] || '预约人员';
-        const creatorClass = { superadmin: 'creator-super', admin: 'creator-admin', operator: 'creator-op' }[creatorRole] || 'creator-op';
+        const creatorClass = { superadmin: 'creator-super', admin: 'creator-admin', operator: 'creator-op' }[creatorRole];
         
         let actionBtns = '';
         if (r.status === 'confirmed') {
@@ -1426,15 +1485,13 @@ function loadRecords() {
             if (canCancel) actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         }
         if (canDel) actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
-        
         if (!actionBtns) actionBtns = '<span style="color:#999;font-size:0.75rem;">无权限</span>';
         
-        html += `<tr data-id="${r.id}">
+        html += `<tr>
             ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}
-            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td>
-            <td>${r.date}</td><td>${r.slot}</td><td>${r.operator||'-'}</td><td>${r.remark||'-'}</td>
-            <td><span class="status ${sc}">${st}</span></td>
-            <td><span class="creator-tag ${creatorClass}">${creatorName}(${creatorRoleName})</span></td>
+            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td>
+            <td>${r.operator||'-'}</td><td><span class="status ${sc}">${st}</span></td>
+            <td><span class="creator-tag ${creatorClass}">${creatorName}(${ROLE_NAMES[creatorRole]})</span></td>
             <td style="font-size:0.75rem;">${ct}</td>
             <td><div class="btn-group">${actionBtns}</div></td>
         </tr>`;
@@ -1447,58 +1504,64 @@ function toggleAllCb(master) {
     document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; });
 }
 
-function confirmRec(id) {
+async function confirmRec(id) {
     if (!confirm('确认此预约？')) return;
-    const list = DB.getRecords();
-    const idx = list.findIndex(r => r.id === id);
-    if (idx > -1) {
-        list[idx].status = 'success';
-        list[idx].confirmedAt = new Date().toISOString();
-        list[idx].confirmedBy = currentUser.name;
-        DB.saveRecords(list);
+    showLoading('处理中...');
+    try {
+        await DB.updateRecord(id, { status: 'success', confirmedBy: currentUser.name });
+        await DB.getRecords();
         loadRecords();
-    }
+    } catch (err) { alert('操作失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
-function cancelRec(id) {
+async function cancelRec(id) {
     if (!confirm('取消此预约？')) return;
-    const list = DB.getRecords();
-    const idx = list.findIndex(r => r.id === id);
-    if (idx > -1) {
-        list[idx].status = 'cancelled';
-        list[idx].cancelledAt = new Date().toISOString();
-        DB.saveRecords(list);
+    showLoading('处理中...');
+    try {
+        await DB.updateRecord(id, { status: 'cancelled' });
+        await DB.getRecords();
         loadRecords();
-    }
+    } catch (err) { alert('操作失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
-function deleteRec(id) {
-    requireSuperPwd(() => {
-        DB.saveRecords(DB.getRecords().filter(r => r.id !== id));
-        loadRecords();
+async function deleteRec(id) {
+    requireSuperPwd(async () => {
+        showLoading('删除中...');
+        try {
+            await DB.deleteRecord(id);
+            await DB.getRecords();
+            loadRecords();
+        } catch (err) { alert('删除失败: ' + err.message); }
+        finally { hideLoading(); }
     });
 }
 
-function batchDelete() {
+async function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
-    if (selected.length === 0) { alert('请先选择要删除的记录！'); return; }
+    if (selected.length === 0) { alert('请先选择！'); return; }
     
-    requireSuperPwd(() => {
-        if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) {
-            DB.saveRecords(DB.getRecords().filter(r => !selected.includes(r.id)));
-            loadRecords();
+    requireSuperPwd(async () => {
+        if (confirm(`确定删除 ${selected.length} 条记录？`)) {
+            showLoading('批量删除中...');
+            try {
+                await DB.deleteRecords(selected);
+                await DB.getRecords();
+                loadRecords();
+            } catch (err) { alert('删除失败: ' + err.message); }
+            finally { hideLoading(); }
         }
     });
 }
 
-function exportExcel() {
+async function exportExcel() {
     requireSuperPwd(() => {
-        const start = document.getElementById('recStart').value;
-        const end = document.getElementById('recEnd').value;
-        const proj = document.getElementById('recProject').value;
-        const stat = document.getElementById('recStatus').value;
-        
-        let list = DB.getRecords().filter(r => {
+        const list = cachedRecords.filter(r => {
+            const start = document.getElementById('recStart').value;
+            const end = document.getElementById('recEnd').value;
+            const proj = document.getElementById('recProject').value;
+            const stat = document.getElementById('recStatus').value;
             if (start && r.date < start) return false;
             if (end && r.date > end) return false;
             if (proj && r.project !== proj) return false;
@@ -1510,38 +1573,30 @@ function exportExcel() {
         
         const statusMap = { confirmed: '待确认', success: '预约成功', cancelled: '已取消' };
         const data = list.map((r,i) => ({
-            '序号': i+1, 
-            '顾客姓名': r.name, 
-            '联系电话': r.phone, 
-            '预约项目': r.project,
-            '预约日期': r.date, 
-            '星期': '周'+DB.getWeekday(r.date), 
-            '预约时段': r.slot,
-            '预约人': r.operator||'', 
-            '备注': r.remark||'', 
-            '状态': statusMap[r.status]||r.status,
-            '创建账户': r.createdByName || r.operator || '-',
-            '创建角色': ROLE_NAMES[r.createdByRole] || '预约人员',
-            '创建时间': new Date(r.createdAt).toLocaleString('zh-CN')
+            '序号': i+1, '顾客姓名': r.name, '联系电话': r.phone, '预约项目': r.project,
+            '预约日期': r.date, '星期': '周'+getWeekday(r.date), '预约时段': r.slot,
+            '预约人': r.operator||'', '状态': statusMap[r.status]||r.status,
+            '创建账户': r.createdByName||'-', '创建角色': ROLE_NAMES[r.createdByRole]||'-'
         }));
         
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '预约记录');
-        XLSX.writeFile(wb, `预约记录_${start||'all'}_${end||'all'}.xlsx`);
+        XLSX.writeFile(wb, `预约记录_${fmtDate(new Date())}.xlsx`);
     });
 }
 
 // ==================== 系统配置 ====================
-function loadCfgTable() {
-    const list = DB.getConfigs();
-    if (list.length === 0) {
+async function loadCfgTable() {
+    await DB.getConfigs();
+    
+    if (cachedConfigs.length === 0) {
         document.getElementById('cfgTable').innerHTML = '<div class="empty-box"><h3>暂无配置</h3></div>';
         return;
     }
     
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>可约天数</th><th>时段容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(c => {
+    cachedConfigs.forEach(c => {
         const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
         html += `<tr>
             <td><strong>${c.name}</strong></td><td>${c.days}天</td><td>${c.capacity}人</td><td>${tags}</td>
@@ -1568,7 +1623,7 @@ function openCfgModal(cfg) {
 }
 
 function editCfg(id) {
-    const cfg = DB.getConfigs().find(c => c.id === id);
+    const cfg = cachedConfigs.find(c => c.id === id);
     if (cfg) openCfgModal(cfg);
 }
 
@@ -1581,71 +1636,40 @@ function addSlotRow(start, end) {
     document.getElementById('cfgSlots').appendChild(div);
 }
 
-function saveCfg(e) {
+async function saveCfg(e) {
     e.preventDefault();
     const id = document.getElementById('cfgId').value;
-    const name = document.getElementById('cfgName').value.trim();
-    const days = parseInt(document.getElementById('cfgDays').value);
-    const capacity = parseInt(document.getElementById('cfgCap').value);
-    const slots = [];
+    const data = {
+        name: document.getElementById('cfgName').value.trim(),
+        days: parseInt(document.getElementById('cfgDays').value),
+        capacity: parseInt(document.getElementById('cfgCap').value),
+        slots: []
+    };
     document.querySelectorAll('#cfgSlots .slot-row').forEach(row => {
         const inputs = row.querySelectorAll('input');
-        if (inputs[0].value && inputs[1].value) slots.push(inputs[0].value + '-' + inputs[1].value);
+        if (inputs[0].value && inputs[1].value) data.slots.push(inputs[0].value + '-' + inputs[1].value);
     });
-    if (slots.length === 0) { alert('请添加时段'); return; }
-    slots.sort();
+    if (data.slots.length === 0) { alert('请添加时段'); return; }
+    data.slots.sort();
     
-    const list = DB.getConfigs();
-    if (id) {
-        const idx = list.findIndex(c => c.id === id);
-        if (idx > -1) list[idx] = { id, name, days, capacity, slots };
-    } else {
-        list.push({ id: Date.now().toString(), name, days, capacity, slots });
-    }
-    DB.saveConfigs(list);
-    hideModal('cfgModal');
-    loadCfgTable();
+    showLoading('保存中...');
+    try {
+        if (id) await DB.updateConfig(id, data);
+        else await DB.addConfig(data);
+        hideModal('cfgModal');
+        await loadCfgTable();
+    } catch (err) { alert('保存失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
-function delCfg(id) {
+async function delCfg(id) {
     if (!confirm('确定删除？')) return;
-    DB.saveConfigs(DB.getConfigs().filter(c => c.id !== id));
-    loadCfgTable();
-}
-
-function exportAllData() {
-    const data = { configs: DB.getConfigs(), records: DB.getRecords(), users: DB.getUsers(), exportTime: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `系统备份_${DB.fmtDate(new Date())}.json`; a.click();
-}
-
-function importAllData(e) {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        try {
-            const data = JSON.parse(ev.target.result);
-            if (confirm('导入将覆盖现有数据，继续？')) {
-                if (data.configs) DB.saveConfigs(data.configs);
-                if (data.records) DB.saveRecords(data.records);
-                if (data.users) DB.saveUsers(data.users);
-                loadCfgTable();
-                alert('导入成功！');
-            }
-        } catch (err) { alert('导入失败：' + err.message); }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-}
-
-function clearRecordsData() {
-    requireSuperPwd(() => {
-        if (confirm('确定清除所有预约记录？')) {
-            DB.saveRecords([]);
-            alert('已清除！');
-        }
-    });
+    showLoading('删除中...');
+    try {
+        await DB.deleteConfig(id);
+        await loadCfgTable();
+    } catch (err) { alert('删除失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
 // ==================== 分享管理 ====================
@@ -1656,28 +1680,26 @@ function initShare() {
 }
 
 function copyLink(id) {
-    const inp = document.getElementById(id);
-    inp.select();
+    document.getElementById(id).select();
     document.execCommand('copy');
     alert('已复制！');
 }
 
 // ==================== 用户管理 ====================
-function loadUserTable() {
-    const list = DB.getUsers();
+async function loadUserTable() {
+    const list = await DB.getUsers();
     const roleMap = { superadmin: ['ur-super','超级管理员'], admin: ['ur-admin','管理员'], operator: ['ur-op','预约人员'] };
     
-    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>密码状态</th><th>操作</th></tr></thead><tbody>`;
+    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>密码</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(u => {
         const [rc, rn] = roleMap[u.role] || ['',''];
-        const pwdSt = u.password ? '已设置' : '无密码';
         html += `<tr>
             <td>${u.username}</td><td>${u.name}</td>
             <td><span class="user-role ${rc}">${rn}</span></td>
-            <td>${pwdSt}</td>
+            <td>${u.password ? '已设置' : '无密码'}</td>
             <td><div class="btn-group">
                 <button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button>
-                ${u.role !== 'superadmin' || DB.getUsers().filter(x=>x.role==='superadmin').length > 1 ? 
+                ${list.filter(x=>x.role==='superadmin').length > 1 || u.role !== 'superadmin' ? 
                     `<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}')">删除</button>` : ''}
             </div></td>
         </tr>`;
@@ -1686,7 +1708,7 @@ function loadUserTable() {
     document.getElementById('userTable').innerHTML = html;
 }
 
-function openUserModal(user) {
+async function openUserModal(user) {
     document.getElementById('userModalTitle').textContent = user ? '编辑用户' : '添加用户';
     document.getElementById('userId').value = user ? user.id : '';
     document.getElementById('userUsername').value = user ? user.username : '';
@@ -1696,91 +1718,91 @@ function openUserModal(user) {
     document.getElementById('userModal').classList.add('show');
 }
 
-function editUser(id) {
-    const user = DB.getUsers().find(u => u.id === id);
+async function editUser(id) {
+    const users = await DB.getUsers();
+    const user = users.find(u => u.id === id);
     if (user) openUserModal(user);
 }
 
-function saveUser(e) {
+async function saveUser(e) {
     e.preventDefault();
     const id = document.getElementById('userId').value;
-    const username = document.getElementById('userUsername').value.trim();
-    const name = document.getElementById('userName').value.trim();
+    const data = {
+        username: document.getElementById('userUsername').value.trim(),
+        name: document.getElementById('userName').value.trim(),
+        role: document.getElementById('userRole').value
+    };
     const pwd = document.getElementById('userPwd').value;
-    const role = document.getElementById('userRole').value;
+    if (pwd || !id) data.password = pwd;
     
-    const list = DB.getUsers();
-    const exists = list.find(u => u.username === username && u.id !== id);
-    if (exists) { alert('用户名已存在！'); return; }
-    
-    if (id) {
-        const idx = list.findIndex(u => u.id === id);
-        if (idx > -1) {
-            list[idx].username = username;
-            list[idx].name = name;
-            list[idx].role = role;
-            if (pwd) list[idx].password = pwd;
-        }
-    } else {
-        list.push({ id: Date.now().toString(), username, name, password: pwd, role });
+    const users = await DB.getUsers();
+    if (users.find(u => u.username === data.username && u.id !== id)) {
+        alert('用户名已存在！'); return;
     }
     
-    DB.saveUsers(list);
-    hideModal('userModal');
-    loadUserTable();
+    showLoading('保存中...');
+    try {
+        if (id) await DB.updateUser(id, data);
+        else await DB.addUser(data);
+        hideModal('userModal');
+        await loadUserTable();
+    } catch (err) { alert('保存失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
-function delUser(id) {
-    if (!confirm('确定删除此用户？')) return;
-    DB.saveUsers(DB.getUsers().filter(u => u.id !== id));
-    loadUserTable();
+async function delUser(id) {
+    if (!confirm('确定删除？')) return;
+    showLoading('删除中...');
+    try {
+        await DB.deleteUser(id);
+        await loadUserTable();
+    } catch (err) { alert('删除失败: ' + err.message); }
+    finally { hideLoading(); }
 }
 
 function downloadUserTemplate() {
-    const data = [
-        { '用户名': 'zhangsan', '姓名': '张三', '密码': '123456', '角色': '预约人员' },
-        { '用户名': 'lisi', '姓名': '李四', '密码': '', '角色': '预约人员' }
-    ];
+    const data = [{ '用户名': 'zhangsan', '姓名': '张三', '密码': '123456', '角色': '预约人员' }];
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '用户模板');
     XLSX.writeFile(wb, '用户导入模板.xlsx');
 }
 
-function importUsers(e) {
+async function importUsers(e) {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(ev) {
+    reader.onload = async function(ev) {
         try {
             const wb = XLSX.read(ev.target.result, { type: 'array' });
             const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            const users = await DB.getUsers();
             
-            const list = DB.getUsers();
+            showLoading('导入中...');
             let added = 0;
-            data.forEach(row => {
+            for (const row of data) {
                 const username = row['用户名'];
                 const name = row['姓名'];
-                const pwd = row['密码'] || '';
-                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
-                const role = roleMap[row['角色']] || 'operator';
-                
-                if (username && name && !list.find(u => u.username === username)) {
-                    list.push({ id: Date.now().toString() + added, username, name, password: String(pwd), role });
+                if (username && name && !users.find(u => u.username === username)) {
+                    const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
+                    await DB.addUser({
+                        username, name,
+                        password: String(row['密码'] || ''),
+                        role: roleMap[row['角色']] || 'operator'
+                    });
                     added++;
                 }
-            });
-            
-            DB.saveUsers(list);
-            loadUserTable();
+            }
+            await loadUserTable();
             alert(`成功导入 ${added} 个用户！`);
-        } catch (err) { alert('导入失败：' + err.message); }
+        } catch (err) { alert('导入失败: ' + err.message); }
+        finally { hideLoading(); }
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
 }
 
-// ==================== 初始化 ====================
-document.addEventListener('DOMContentLoaded', checkSession);
+// ==================== 启动 ====================
+document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
 </html>
