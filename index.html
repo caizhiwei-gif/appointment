@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (Vika极速版)</title>
+    <title>画美线上预约系统 (Vika国内修复版)</title>
     
-    <!-- 1. 引入 Excel 库 -->
-    <script src="https://jsd.cdn.zzko.cn/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 1. 引入 Excel 库 (国内极速源) -->
+    <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* ================= 样式部分 (保持完美版样式) ================= */
+        /* ================= 样式部分 (保持 v12.0 完美版) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -281,6 +281,9 @@
                 <div class="card-header"><h2>👥 用户管理</h2><p>管理系统用户</p></div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openUserModal()">➕ 添加用户</button>
+                    <button class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载用户模板</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileUserImport').click()">📤 导入用户</button>
+                    <input type="file" id="fileUserImport" accept=".xlsx,.xls" style="display:none" onchange="importUsers(event)">
                 </div>
                 <div class="tbl-wrap" id="userTable"></div>
             </div>
@@ -303,124 +306,136 @@
 <div class="modal-mask" id="superPwdModal"><div class="modal-box" style="max-width:360px;"><div class="modal-head"><h3>🔐 超管验证</h3><button class="modal-close" onclick="hideModal('superPwdModal')">✕</button></div><form onsubmit="verifySuperPwd(event)"><div class="form-group"><label>请输入超级管理员密码</label><input type="password" class="form-control" id="superPwdInput" required></div><div class="modal-foot" style="border:none;padding-top:0;"><button type="button" class="btn btn-secondary" onclick="hideModal('superPwdModal')">取消</button><button type="submit" class="btn btn-purple">确认</button></div></form></div></div>
 
 <script>
-// ==================== 🟢 维格表(Vika) 配置 ====================
-// 必须修改这 4 项！！！
+// ==================== 🟢 维格表(Vika) 配置 🟢 ====================
+// ⚠️ 必须修改这 4 项！！！
 const VIKA_TOKEN = "uskKIVNPRELxHGFCc9PnQZb";
-const DST_RECORDS = "dstgPwahY3fU31uAMm/viwgndFgW9Jgc ";
+const DST_RECORDS = "dstgPwahY3fU31uAMm/viwgndFgW9Jgc";
 const DST_CONFIGS = "dst9KJZJj8nE2aVtmL/viwsyjvD2WCy2";
 const DST_USERS   = "dstaU2jlgkPNkpDyfE/viw5ExgFbTT1M";
 
-// ==================== Vika DB 封装层 ====================
+// ==================== Vika DB 封装层 (修复保存问题) ====================
 const VikaDB = {
+    // 通用请求函数
     async request(dstId, method = 'GET', data = null, recordId = null) {
         let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
-        if (recordId) url += `/${recordId}`;
-        if (method === 'GET') url += '?pageNum=1&pageSize=1000'; // 简单分页处理
+        // 如果是 GET 请求，获取所有数据
+        if (method === 'GET') url += '?pageNum=1&pageSize=1000';
         
         const options = {
             method,
-            headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' }
+            headers: { 
+                'Authorization': `Bearer ${VIKA_TOKEN}`, 
+                'Content-Type': 'application/json' 
+            }
         };
-        if (data) options.body = JSON.stringify({ records: [{ fields: data }] });
+
+        // 构造 Vika 要求的特殊 JSON 结构
+        if (data) {
+            if (method === 'POST') {
+                // 新增：{ records: [ { fields: {...} } ] }
+                options.body = JSON.stringify({ records: [{ fields: data }] });
+            } else if (method === 'PATCH') {
+                // 更新：{ records: [ { recordId: "...", fields: {...} } ] }
+                if (!recordId) throw new Error("更新操作需要 recordId");
+                options.body = JSON.stringify({ records: [{ recordId: recordId, fields: data }] });
+            }
+        }
         
+        // 删除操作单独处理 Query String
+        if (method === 'DELETE') {
+            url += `?recordIds=${recordId}`; // recordId 可以是逗号分隔的字符串
+            delete options.body;
+        }
+
         const res = await fetch(url, options).then(r => r.json());
-        if (!res.success) throw new Error(res.message);
-        return res.data.records;
+        if (!res.success) {
+            console.error("Vika Error:", res);
+            throw new Error(res.message);
+        }
+        return res.data ? res.data.records : [];
     },
 
+    // --- 用户相关 ---
     async getUsers() {
         const rows = await this.request(DST_USERS);
-        return rows.map(r => ({ ...r.fields, objectId: r.recordId }));
+        return rows.map(r => ({ ...r.fields, id: r.recordId })); // 映射 recordId 为 id
     },
     async saveUser(u) {
-        // Vika 不支持 ID 更新，必须用 recordId。如果 u.id 存在则是更新
+        // 构造符合 Vika 的数据
+        const fields = { username: u.username, name: u.name, role: u.role };
+        if(u.password) fields.password = u.password;
+
         if (u.id) {
-            const data = { username:u.username, name:u.name, role:u.role };
-            if(u.password) data.password = u.password;
-            // Vika 更新格式特殊
-            const url = `https://api.vika.cn/fusion/v1/datasheets/${DST_USERS}/records`;
-            await fetch(url, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records: [{ recordId: u.id, fields: data }] })
-            });
+            // 更新
+            await this.request(DST_USERS, 'PATCH', fields, u.id);
         } else {
-            await this.request(DST_USERS, 'POST', {
-                username: u.username, password: u.password, name: u.name, role: u.role
-            });
+            // 新增
+            await this.request(DST_USERS, 'POST', fields);
         }
     },
     async deleteUser(id) {
-        await fetch(`https://api.vika.cn/fusion/v1/datasheets/${DST_USERS}/records?recordIds=${id}`, {
-            method: 'DELETE', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}` }
-        });
+        await this.request(DST_USERS, 'DELETE', null, id);
     },
 
+    // --- 配置相关 ---
     async getConfigs() {
         const rows = await this.request(DST_CONFIGS);
         return rows.map(r => ({ 
             ...r.fields, 
-            objectId: r.recordId,
+            id: r.recordId,
             // 兼容处理：Vika 存 slots 可能是文本，需要分割
-            slots: (r.fields.slots || "").split(/[,，]/).map(s=>s.trim()).filter(s=>s) 
+            slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : []
         }));
     },
     async saveConfig(c) {
-        const data = { name: c.name, days: c.days, capacity: c.capacity, slots: c.slots.join(',') };
+        const fields = { 
+            name: c.name, 
+            days: parseInt(c.days), 
+            capacity: parseInt(c.capacity), 
+            slots: c.slots.join(',') 
+        };
         if (c.id) {
-            const url = `https://api.vika.cn/fusion/v1/datasheets/${DST_CONFIGS}/records`;
-            await fetch(url, {
-                method: 'PATCH', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records: [{ recordId: c.id, fields: data }] })
-            });
+            await this.request(DST_CONFIGS, 'PATCH', fields, c.id);
         } else {
-            await this.request(DST_CONFIGS, 'POST', data);
+            await this.request(DST_CONFIGS, 'POST', fields);
         }
     },
     async deleteConfig(id) {
-        await fetch(`https://api.vika.cn/fusion/v1/datasheets/${DST_CONFIGS}/records?recordIds=${id}`, {
-            method: 'DELETE', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}` }
-        });
+        await this.request(DST_CONFIGS, 'DELETE', null, id);
     },
 
+    // --- 记录相关 ---
     async getRecords(filter) {
-        // Vika 筛选较复杂，这里前端筛选
         const rows = await this.request(DST_RECORDS);
-        let list = rows.map(r => ({ ...r.fields, objectId: r.recordId, createdAt: r.createdAt })); // createdAt Vika自带
+        let list = rows.map(r => ({ ...r.fields, id: r.recordId, createdAt: r.createdAt }));
+        // 前端筛选
         if(filter.project) list = list.filter(r => r.project === filter.project);
         if(filter.start) list = list.filter(r => r.date >= filter.start);
         if(filter.end) list = list.filter(r => r.date <= filter.end);
         return list.sort((a,b) => b.createdAt - a.createdAt);
     },
     async addRecord(r) {
-        const data = {
+        const fields = {
             name: r.name, phone: r.phone, project: r.project, date: r.date,
-            slot: r.slot, operator: r.operator, remark: r.remark, status: 'confirmed', createdBy: currentUser.username
+            slot: r.slot, operator: r.operator, remark: r.remark, 
+            status: 'confirmed', createdBy: currentUser.username
         };
-        const res = await this.request(DST_RECORDS, 'POST', data);
+        const res = await this.request(DST_RECORDS, 'POST', fields);
         const saved = res[0];
-        return { ...saved.fields, objectId: saved.recordId };
+        return { ...saved.fields, id: saved.recordId };
     },
-    async updateRecordStatus(id, status, extra) {
-        const url = `https://api.vika.cn/fusion/v1/datasheets/${DST_RECORDS}/records`;
-        await fetch(url, {
-            method: 'PATCH', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ records: [{ recordId: id, fields: { status } }] })
-        });
+    async updateRecordStatus(id, status) {
+        await this.request(DST_RECORDS, 'PATCH', { status: status }, id);
     },
     async deleteRecord(id) {
-        await fetch(`https://api.vika.cn/fusion/v1/datasheets/${DST_RECORDS}/records?recordIds=${id}`, {
-            method: 'DELETE', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}` }
-        });
+        await this.request(DST_RECORDS, 'DELETE', null, id);
     },
     async batchDeleteRecords(ids) {
         const idsParam = ids.join(',');
-        await fetch(`https://api.vika.cn/fusion/v1/datasheets/${DST_RECORDS}/records?recordIds=${idsParam}`, {
-            method: 'DELETE', headers: { 'Authorization': `Bearer ${VIKA_TOKEN}` }
-        });
+        await this.request(DST_RECORDS, 'DELETE', null, idsParam);
     },
 
-    // 业务逻辑
+    // --- 业务逻辑 ---
     async fetchActiveRecords(pName) {
         const all = await this.getRecords({});
         recordsCache = all.filter(r => r.project === pName && r.status !== 'cancelled');
@@ -429,7 +444,6 @@ const VikaDB = {
         return recordsCache.filter(r => r.project===name && r.date===date && r.slot===slot).length;
     },
     async canBookAsync(name, date, slot) {
-        // 简单实现：重新拉取一次确保准确
         await this.fetchActiveRecords(name);
         const count = this.countBookedLocal(name, date, slot);
         const cfgs = await this.getConfigs();
@@ -608,7 +622,7 @@ async function loadRecords() {
     let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
-        html += `<tr data-id="${r.objectId}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.objectId}"></td><td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td><span class="status ${sc}">${r.status}</span></td><td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="confirmRec('${r.objectId}')">确认</button><button class="btn btn-warning btn-sm" onclick="cancelRec('${r.objectId}')">取消</button><button class="btn btn-danger btn-sm" onclick="deleteRec('${r.objectId}')">删除</button></div></td></tr>`;
+        html += `<tr data-id="${r.id}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td><td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td><span class="status ${sc}">${r.status}</span></td><td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button><button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button><button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button></div></td></tr>`;
     });
     tbl.innerHTML = html + '</tbody></table>';
 }
@@ -621,22 +635,22 @@ function exportExcel() { alert('请直接在维格表后台导出 Excel，更方
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(c => html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}</td><td>${c.capacity}</td><td>${c.slots.join(',')}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.objectId}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.objectId}')">删除</button></div></td></tr>`);
+    list.forEach(c => html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}</td><td>${c.capacity}</td><td>${c.slots.join(',')}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button></div></td></tr>`);
     document.getElementById('cfgTable').innerHTML = html + '</tbody></table>';
 }
-async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.objectId === id)); }
-function openCfgModal(cfg) { document.getElementById('cfgId').value = cfg ? cfg.objectId : ''; document.getElementById('cfgName').value = cfg ? cfg.name : ''; document.getElementById('cfgDays').value = cfg ? cfg.days : ''; document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; document.getElementById('cfgSlots').innerHTML = ''; (cfg?cfg.slots:['09:00-10:00']).forEach(s => addSlotRow(...s.split('-'))); document.getElementById('cfgModal').classList.add('show'); }
+async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.id === id)); }
+function openCfgModal(cfg) { document.getElementById('cfgId').value = cfg ? cfg.id : ''; document.getElementById('cfgName').value = cfg ? cfg.name : ''; document.getElementById('cfgDays').value = cfg ? cfg.days : ''; document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; document.getElementById('cfgSlots').innerHTML = ''; (cfg?cfg.slots:['09:00-10:00']).forEach(s => addSlotRow(...s.split('-'))); document.getElementById('cfgModal').classList.add('show'); }
 function addSlotRow(s, e) { const div = document.createElement('div'); div.className = 'slot-row'; div.innerHTML = `<input type="time" class="form-control" value="${s||''}" required><span>至</span><input type="time" class="form-control" value="${e||''}" required><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`; document.getElementById('cfgSlots').appendChild(div); }
 async function saveCfg(e) { e.preventDefault(); const slots = []; document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { const i = row.querySelectorAll('input'); if(i[0].value && i[1].value) slots.push(i[0].value+'-'+i[1].value); }); await VikaDB.saveConfig({ id: document.getElementById('cfgId').value, name: document.getElementById('cfgName').value, days: parseInt(document.getElementById('cfgDays').value), capacity: parseInt(document.getElementById('cfgCap').value), slots: slots.sort() }); hideModal('cfgModal'); loadCfgTable(); }
 async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.deleteConfig(id); loadCfgTable(); } }
 async function loadUserTable() {
     const list = await VikaDB.getUsers();
     let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${ROLE_NAMES[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.objectId}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.objectId}')">删除</button></div></td></tr>`);
+    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${ROLE_NAMES[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
     document.getElementById('userTable').innerHTML = html + '</tbody></table>';
 }
-async function editUser(id) { const users = await VikaDB.getUsers(); openUserModal(users.find(u => u.objectId === id)); }
-function openUserModal(u) { document.getElementById('userId').value = u ? u.objectId : ''; document.getElementById('userUsername').value = u ? u.username : ''; document.getElementById('userName').value = u ? u.name : ''; document.getElementById('userRole').value = u ? u.role : 'operator'; document.getElementById('userModal').classList.add('show'); }
+async function editUser(id) { const users = await VikaDB.getUsers(); openUserModal(users.find(u => u.id === id)); }
+function openUserModal(u) { document.getElementById('userId').value = u ? u.id : ''; document.getElementById('userUsername').value = u ? u.username : ''; document.getElementById('userName').value = u ? u.name : ''; document.getElementById('userRole').value = u ? u.role : 'operator'; document.getElementById('userModal').classList.add('show'); }
 async function saveUser(e) { e.preventDefault(); await VikaDB.saveUser({ id: document.getElementById('userId').value, username: document.getElementById('userUsername').value, name: document.getElementById('userName').value, password: document.getElementById('userPwd').value, role: document.getElementById('userRole').value }); hideModal('userModal'); loadUserTable(); }
 async function deleteUser(id) { if(confirm('确定删除？')) { await VikaDB.deleteUser(id); loadUserTable(); } }
 function requireSuperPwd(cb) { superPwdCallback = cb; document.getElementById('superPwdInput').value=''; document.getElementById('superPwdModal').classList.add('show'); }
@@ -644,7 +658,62 @@ async function verifySuperPwd(e) { e.preventDefault(); const users = await VikaD
 function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 function initShare() { const base = location.href.split('?')[0]; document.getElementById('userLink').value = base; document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`; }
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
-function downloadConfigTemplate() { alert('请在维格表中直接操作'); } function downloadUserTemplate() { alert('请在维格表中直接操作'); } function importConfigs() { alert('请在维格表导入'); } function importUsers() { alert('请在维格表导入'); }
+
+// --- Excel 模板与导入 (已实现) ---
+function downloadConfigTemplate() {
+    const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '项目模板');
+    XLSX.writeFile(wb, '项目配置导入模板.xlsx');
+}
+function downloadUserTemplate() {
+    const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '用户模板');
+    XLSX.writeFile(wb, '用户导入模板.xlsx');
+}
+function importConfigs(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'array' });
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (let row of data) {
+                const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s);
+                await VikaDB.saveConfig({ name: row['项目名称'], days: row['可约天数'], capacity: row['时段容量'], slots: slots });
+                count++;
+            }
+            alert(`已导入 ${count} 个配置`); loadCfgTable();
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+}
+function importUsers(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'array' });
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (let row of data) {
+                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
+                const roleCode = roleMap[row['角色']] || 'operator';
+                await VikaDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']), role: roleCode });
+                count++;
+            }
+            alert(`已导入 ${count} 个用户`); loadUserTable();
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+}
+
 document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
