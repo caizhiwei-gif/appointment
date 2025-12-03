@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v10.0 UI修复版)</title>
+    <title>画美线上预约系统 (v11.0 UI完美修复版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK -->
@@ -76,9 +76,10 @@
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
-        /* 🟢 修复：调整按钮间距和内边距，防止太挤 🟢 */
-        .btn-sm { padding: 6px 10px; font-size: 0.8rem; white-space: nowrap; }
-        .btn-group { display: flex; gap: 6px; align-items: center; }
+        
+        /* 🟢 修复：强制按钮不换行，且给足够空间 🟢 */
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
+        .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
         
         .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
         .filter-item { flex: 1; min-width: 140px; }
@@ -106,8 +107,12 @@
         .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
         
-        /* 🟢 修复：强制“操作”列不换行 🟢 */
-        .data-tbl td:last-child { white-space: nowrap; width: 1%; }
+        /* 🟢 修复：给操作列设定最小宽度 🟢 */
+        .data-tbl td:last-child { 
+            white-space: nowrap; 
+            min-width: 190px; /* 保证三个按钮能放下 */
+            width: 1%; 
+        }
         
         .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
         .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
@@ -1116,6 +1121,7 @@ function initRecords() {
     });
 }
 
+// 🟢 修复：加载记录时应用双维度筛选 🟢
 async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
@@ -1158,7 +1164,6 @@ async function loadRecords() {
         const [sc, st] = statMap[r.status] || ['',''];
         const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
         
-        // 🟢 修复：按钮组不换行 🟢
         let actionBtns = '';
         if (canConfirm && r.status !== 'success') {
             actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
