@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (完美版)</title>
+    <title>画美线上预约系统 (v5.0 增强版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK (国际版CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (原汁原味) ================= */
+        /* ================= 样式部分 (保持最美观版本) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -372,8 +372,12 @@
                     <h2>⚙️ 项目配置管理</h2>
                     <p>管理预约项目的配置规则</p>
                 </div>
-                <div style="margin-bottom:18px;">
+                <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
+                    <!-- 新增功能按钮 -->
+                    <button class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
+                    <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
                 </div>
                 <div class="tbl-wrap" id="cfgTable"></div>
             </div>
@@ -823,7 +827,13 @@ async function verifySuperPwd(e) {
     
     if (valid) {
         hideModal('superPwdModal');
-        if (superPwdCallback) superPwdCallback();
+        if (superPwdCallback) {
+            try {
+                await superPwdCallback();
+            } catch (err) {
+                alert("操作失败: " + err.message);
+            }
+        }
     } else {
         alert('超管密码错误！');
     }
@@ -901,16 +911,8 @@ async function renderDates(filterSlot) {
         const wd = SystemDB.getWeekday(dt);
         const isToday = dt === SystemDB.fmtDate(new Date());
         let avail = 0;
-        
-        // 修复：双向筛选逻辑
-        if (filterSlot) { 
-            // 如果选了时段，只计算该时段的剩余
-            avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, filterSlot); 
-        } else { 
-            // 没选时段，计算当天所有时段剩余总和
-            cfg.slots.forEach(s => { avail += cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, s); }); 
-        }
-        
+        if (filterSlot) { avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, filterSlot); }
+        else { cfg.slots.forEach(s => { avail += cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, s); }); }
         const full = avail <= 0;
         const sel = bookState.date === dt;
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}">
@@ -927,22 +929,12 @@ async function renderSlots(filterDate) {
     let html = '';
     cfg.slots.forEach(s => {
         let avail = 0;
-        
-        // 修复：双向筛选逻辑
-        if (filterDate) { 
-            // 如果选了日期，计算该日期该时段剩余
-            avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, filterDate, s); 
-        } else { 
-            // 没选日期，显示该时段在未来几天的总剩余（或者设为999表示可选）
-            // 这里为了界面简洁，如果不选日期，我们默认显示可选，或者统计所有日期的该时段剩余
-            avail = 999; 
-        }
+        if (filterDate) { avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, filterDate, s); }
+        else { avail = 999; }
         
         const full = avail <= 0;
         const sel = bookState.slot === s;
-        
-        // 修复：点击事件
-        // 如果没选日期，点击时段应该触发“选定这个时段”，并反向筛选日期
+        // 如果没选日期，点击时段将触发时段选择
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
             <div>${s}</div>
             <div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div>
@@ -953,7 +945,6 @@ async function renderSlots(filterDate) {
 
 function pickDate(dt) {
     bookState.date = dt;
-    // 选中日期后，刷新时段显示（带上日期过滤）
     document.getElementById('timeGroup').style.display = 'block';
     renderSlots(dt);
     checkSubmit();
@@ -961,7 +952,6 @@ function pickDate(dt) {
 
 function pickSlot(s) {
     bookState.slot = s;
-    // 选中时段后，刷新日期显示（带上时段过滤）
     document.getElementById('dateGroup').style.display = 'block';
     renderDates(s);
     checkSubmit();
@@ -1033,56 +1023,36 @@ async function initDashboard() {
     loadDashboard();
 }
 
-// 修复：恢复原版看板样式的逻辑
 async function loadDashboard() {
     const date = document.getElementById('dashDate').value;
     const slot = document.getElementById('dashSlot').value;
     const div = document.getElementById('dashStats');
     div.innerHTML = '<p>加载数据中...</p>';
-    
-    // 1. 获取当天数据
     const query = new AV.Query('AppRecord');
     query.equalTo('date', date);
     query.notEqualTo('status', 'cancelled');
     const dayRecords = await query.find();
-    
-    // 2. 统计函数
     const count = (p, s) => dayRecords.filter(r => r.get('project')===p && r.get('slot')===s).length;
-    
     const cfgs = await SystemDB.getConfigs();
     let html = '';
-    
     cfgs.forEach(cfg => {
         const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
-        let total = 0, booked = 0;
-        
-        // 计算总进度
-        slotsChk.forEach(s => { 
-            total += cfg.capacity; 
-            booked += count(cfg.name, s);
-        });
-        
-        const avail = Math.max(0, total - booked);
-        const pct = total > 0 ? (booked / total * 100) : 0;
-        const full = avail === 0;
-        const pClass = pct >= 80 ? 'prog-high' : (pct >= 50 ? 'prog-mid' : 'prog-low');
-        
-        // 生成时段明细表
-        let slotRows = '';
+        let total = 0, booked = 0, slotRows = '';
         slotsChk.forEach(s => {
             const b = count(cfg.name, s);
+            total += cfg.capacity; booked += b;
             const r = cfg.capacity - b;
             let sc = 'st-ok', st = '可预约';
             if (r <= 0) { sc = 'st-full'; st = '已满'; }
             else if (r <= cfg.capacity * 0.3) { sc = 'st-warn'; st = '紧张'; }
             slotRows += `<tr><td>${s}</td><td>${b}/${cfg.capacity}</td><td>${r}</td><td><span class="status ${sc}">${st}</span></td></tr>`;
         });
-        
+        const avail = Math.max(0, total - booked);
+        const pct = total > 0 ? (booked / total * 100) : 0;
+        const full = avail === 0;
+        const pClass = pct >= 80 ? 'prog-high' : (pct >= 50 ? 'prog-mid' : 'prog-low');
         html += `<div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-title">${cfg.name}</span>
-                <span class="stat-badge ${full?'badge-full':'badge-ok'}">${full?'已满':'可约'}</span>
-            </div>
+            <div class="stat-header"><span class="stat-title">${cfg.name}</span><span class="stat-badge ${full?'badge-full':'badge-ok'}">${full?'已满':'可约'}</span></div>
             <div class="stat-nums">
                 <div class="stat-num"><div class="stat-val">${total}</div><div class="stat-lbl">总额</div></div>
                 <div class="stat-num"><div class="stat-val" style="color:var(--danger);">${booked}</div><div class="stat-lbl">已约</div></div>
@@ -1094,7 +1064,6 @@ async function loadDashboard() {
     });
     div.innerHTML = html;
 }
-
 document.getElementById('dashDate').addEventListener('change', loadDashboard);
 document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
@@ -1147,14 +1116,58 @@ async function loadRecords() {
     tbl.innerHTML = html;
 }
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
-async function confirmRec(id) { if (!confirm('确认此预约？')) return; await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name }); loadRecords(); }
-async function cancelRec(id) { if (!confirm('取消此预约？')) return; await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() }); loadRecords(); }
-function deleteRec(id) { requireSuperPwd(async () => { await SystemDB.deleteRecord(id); loadRecords(); }); }
+
+// 🟢 修复：添加 try-catch 和 权限检查 🟢
+async function confirmRec(id) {
+    if (!confirm('确认此预约？')) return;
+    try {
+        await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name });
+        alert('操作成功');
+        loadRecords();
+    } catch (err) {
+        alert('操作失败！如果是403错误，请在LeanCloud设置AppRecord表的write/update权限。\n错误信息: ' + err.message);
+    }
+}
+
+async function cancelRec(id) {
+    if (!confirm('取消此预约？')) return;
+    try {
+        await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() });
+        alert('操作成功');
+        loadRecords();
+    } catch (err) {
+        alert('操作失败！如果是403错误，请在LeanCloud设置AppRecord表的write/update权限。\n错误信息: ' + err.message);
+    }
+}
+
+function deleteRec(id) {
+    requireSuperPwd(async () => {
+        try {
+            await SystemDB.deleteRecord(id);
+            alert('删除成功');
+            loadRecords();
+        } catch (err) {
+            alert('删除失败！\n错误信息: ' + err.message);
+        }
+    });
+}
+
 function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
     if (selected.length === 0) { alert('请先选择要删除的记录！'); return; }
-    requireSuperPwd(async () => { if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) { await SystemDB.batchDeleteRecords(selected); loadRecords(); } });
+    requireSuperPwd(async () => {
+        if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) {
+            try {
+                await SystemDB.batchDeleteRecords(selected);
+                alert('批量删除成功');
+                loadRecords();
+            } catch (err) {
+                alert('批量删除失败！\n错误信息: ' + err.message);
+            }
+        }
+    });
 }
+
 async function exportExcel() {
     requireSuperPwd(async () => {
         const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
@@ -1281,6 +1294,55 @@ function importUsers(e) {
                 count++;
             }
             alert(`已导入 ${count} 个用户`); loadUserTable();
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+}
+
+// 🟢 新增功能：下载项目配置模板 🟢
+function downloadConfigTemplate() {
+    const data = [{ 
+        '项目名称': '示例项目', 
+        '可约天数': 7, 
+        '时段容量': 5, 
+        '时段列表(逗号分隔)': '09:00-10:00, 10:00-11:00' 
+    }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '项目模板');
+    XLSX.writeFile(wb, '项目配置导入模板.xlsx');
+}
+
+// 🟢 新增功能：导入项目配置 🟢
+function importConfigs(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'array' });
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (let row of data) {
+                const name = row['项目名称'];
+                const days = row['可约天数'];
+                const cap = row['时段容量'];
+                const slotsStr = row['时段列表(逗号分隔)'] || '';
+                
+                if(name && days && cap && slotsStr) {
+                    // 处理中文逗号和多余空格
+                    const slots = slotsStr.split(/[,，]/).map(s => s.trim()).filter(s=>s);
+                    await SystemDB.saveConfig({
+                        name: name,
+                        days: parseInt(days),
+                        capacity: parseInt(cap),
+                        slots: slots
+                    });
+                    count++;
+                }
+            }
+            alert(`已成功导入 ${count} 个项目配置！`);
+            loadCfgTable();
         } catch (err) { alert('导入失败：' + err.message); }
     };
     reader.readAsArrayBuffer(file);
