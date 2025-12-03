@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v6.1 修复版)</title>
+    <title>画美线上预约系统 (v7.0 修正版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -262,8 +262,9 @@
                         <div class="sel-grid" id="timeGrid"></div>
                     </div>
                     <div class="form-group">
-                        <label>预约人</label>
-                        <input type="text" class="form-control" id="inpOperator" placeholder="预约操作人（选填）">
+                        <!-- 🟢 修改：增加必填红星 🟢 -->
+                        <label>预约人 <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="inpOperator" placeholder="请输入预约操作人" required>
                     </div>
                     <div class="form-group">
                         <label>备注</label>
@@ -545,23 +546,17 @@
 
 <script>
 // ==================== LeanCloud 初始化 (国际版) ====================
-window.onerror = function(message, source, lineno, colno, error) {
-    alert("系统错误: " + message + "\nLine: " + lineno);
-};
+// ⚠️ 已为你填入密钥
 
 const APP_ID = "9vvVR2SwvoL7KZRJTfGI8FWu-MdYXbMMI";
 const APP_KEY = "I2IjTub3wD7zhF8bVe3q1V8N";
 const SERVER_URL = "https://9vvvr2sw.api.lncldglobal.com"; 
 
-try {
-    AV.init({
-      appId: APP_ID,
-      appKey: APP_KEY,
-      serverURLs: SERVER_URL
-    });
-} catch(e) {
-    alert("初始化失败，请检查网络或配置！");
-}
+AV.init({
+  appId: APP_ID,
+  appKey: APP_KEY,
+  serverURLs: SERVER_URL
+});
 
 // ==================== 全局状态 ====================
 let currentUser = null;
@@ -587,7 +582,6 @@ function getPhoneStatus(phone) {
 }
 
 // ==================== 数据库层 (SystemDB) ====================
-// 🔴 注意：为了防止缓存冲突，变量名已改为 SystemDB
 const SystemDB = {
     async getUsers() {
         try {
@@ -680,7 +674,7 @@ const SystemDB = {
         rec.set('createdByName', currentUser.name);
         rec.set('createdByRole', currentUser.role);
         
-        // 🔴 关键修复：强制设置权限为所有人可读写
+        // 🔴 关键权限设置：开放读写 🔴
         const acl = new AV.ACL();
         acl.setPublicReadAccess(true);
         acl.setPublicWriteAccess(true);
@@ -947,7 +941,6 @@ async function renderSlots(filterDate) {
         
         const full = avail <= 0;
         const sel = bookState.slot === s;
-        // 如果没选日期，点击时段将触发时段选择
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
             <div>${s}</div>
             <div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div>
@@ -973,17 +966,23 @@ function pickSlot(s) {
 function checkSubmit() {
     const name = document.getElementById('inpName').value.trim();
     const phone = document.getElementById('inpPhone').value.trim();
+    // 🟢 修复：预约人必填校验 🟢
+    const operator = document.getElementById('inpOperator').value.trim();
+    
     const phStatus = getPhoneStatus(phone);
     const pi = document.getElementById('inpPhone');
     const ph = document.getElementById('phoneHint');
     pi.className = 'form-control ' + (phone ? (phStatus.valid?'valid':'invalid') : '');
     ph.className = 'form-hint ' + phStatus.class;
     ph.textContent = phStatus.msg;
-    const can = name.length>=2 && phStatus.valid && bookState.project && bookState.date && bookState.slot;
+    
+    // 校验条件增加 operator
+    const can = name.length>=2 && phStatus.valid && bookState.project && bookState.date && bookState.slot && operator.length > 0;
     document.getElementById('btnSubmit').disabled = !can;
 }
 
 document.getElementById('inpName').addEventListener('input', checkSubmit);
+document.getElementById('inpOperator').addEventListener('input', checkSubmit); // 🟢 监听预约人输入
 document.getElementById('inpPhone').addEventListener('input', function() { this.value = this.value.replace(/[^\d]/g, ''); checkSubmit(); });
 
 document.getElementById('bookingForm').addEventListener('submit', async function(e) {
@@ -999,7 +998,7 @@ document.getElementById('bookingForm').addEventListener('submit', async function
             project: bookState.project,
             date: bookState.date,
             slot: bookState.slot,
-            operator: document.getElementById('inpOperator').value.trim() || currentUser.name,
+            operator: document.getElementById('inpOperator').value.trim(),
             remark: document.getElementById('inpRemark').value.trim(),
             status: 'confirmed'
         };
@@ -1083,8 +1082,12 @@ document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 function initRecords() {
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
+    // 🟢 修复：默认查询未来90天的记录，防止提交后看不到 🟢
+    const future = new Date(today); future.setDate(future.getDate() + 90);
+    
     document.getElementById('recStart').value = SystemDB.fmtDate(ago);
-    document.getElementById('recEnd').value = SystemDB.fmtDate(today);
+    document.getElementById('recEnd').value = SystemDB.fmtDate(future);
+    
     SystemDB.getConfigs().then(cfgs => {
         const sel = document.getElementById('recProject');
         sel.innerHTML = '<option value="">全部</option>';
@@ -1129,58 +1132,14 @@ async function loadRecords() {
     tbl.innerHTML = html;
 }
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
-
-// 🟢 修复：添加 try-catch 和 权限检查 🟢
-async function confirmRec(id) {
-    if (!confirm('确认此预约？')) return;
-    try {
-        await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name });
-        alert('操作成功');
-        loadRecords();
-    } catch (err) {
-        alert('操作失败！如果是403错误，请在LeanCloud设置AppRecord表的write/update权限。\n错误信息: ' + err.message);
-    }
-}
-
-async function cancelRec(id) {
-    if (!confirm('取消此预约？')) return;
-    try {
-        await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() });
-        alert('操作成功');
-        loadRecords();
-    } catch (err) {
-        alert('操作失败！如果是403错误，请在LeanCloud设置AppRecord表的write/update权限。\n错误信息: ' + err.message);
-    }
-}
-
-function deleteRec(id) {
-    requireSuperPwd(async () => {
-        try {
-            await SystemDB.deleteRecord(id);
-            alert('删除成功');
-            loadRecords();
-        } catch (err) {
-            alert('删除失败！\n错误信息: ' + err.message);
-        }
-    });
-}
-
+async function confirmRec(id) { if (!confirm('确认此预约？')) return; await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name }); loadRecords(); }
+async function cancelRec(id) { if (!confirm('取消此预约？')) return; await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() }); loadRecords(); }
+function deleteRec(id) { requireSuperPwd(async () => { await SystemDB.deleteRecord(id); loadRecords(); }); }
 function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
     if (selected.length === 0) { alert('请先选择要删除的记录！'); return; }
-    requireSuperPwd(async () => {
-        if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) {
-            try {
-                await SystemDB.batchDeleteRecords(selected);
-                alert('批量删除成功');
-                loadRecords();
-            } catch (err) {
-                alert('批量删除失败！\n错误信息: ' + err.message);
-            }
-        }
-    });
+    requireSuperPwd(async () => { if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) { await SystemDB.batchDeleteRecords(selected); loadRecords(); } });
 }
-
 async function exportExcel() {
     requireSuperPwd(async () => {
         const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
@@ -1313,7 +1272,6 @@ function importUsers(e) {
     e.target.value = '';
 }
 
-// 🟢 新增功能：下载项目配置模板 🟢
 function downloadConfigTemplate() {
     const data = [{ 
         '项目名称': '示例项目', 
@@ -1327,7 +1285,6 @@ function downloadConfigTemplate() {
     XLSX.writeFile(wb, '项目配置导入模板.xlsx');
 }
 
-// 🟢 新增功能：导入项目配置 🟢
 function importConfigs(e) {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
@@ -1343,7 +1300,6 @@ function importConfigs(e) {
                 const slotsStr = row['时段列表(逗号分隔)'] || '';
                 
                 if(name && days && cap && slotsStr) {
-                    // 处理中文逗号和多余空格
                     const slots = slotsStr.split(/[,，]/).map(s => s.trim()).filter(s=>s);
                     await SystemDB.saveConfig({
                         name: name,
