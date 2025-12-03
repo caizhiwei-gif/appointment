@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v16.0 国内极速版)</title>
+    <title>画美线上预约系统 (v17.0 最终修复版)</title>
     
-    <!-- 🟢 关键修改 1：使用国内源加载 Excel 库 -->
+    <!-- 1. 引入 Excel 库 (国内源) -->
     <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
-    <!-- 🟢 关键修改 2：使用国内源加载 Bmob SDK (解决加载失败问题) -->
-    <script src="https://npm.elemecdn.com/bmob.js-sdk-v3.19.0/dist/Bmob-3.19.0.min.js"></script>
+    <!-- 2. 引入 Bmob SDK (国内源 - 已修正链接错误) -->
+    <script src="https://npm.elemecdn.com/bmob.js-sdk@3.19.0/dist/Bmob-3.19.0.min.js"></script>
     
     <style>
-        /* ================= 样式部分 ================= */
+        /* ================= 样式部分 (保持 v12.0 完美排版) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -323,7 +323,7 @@
         </div>
     </div>
 
-    <!-- 页面3：预约记录 -->
+    <!-- 页面3：预约记录 (v13.0 双维度筛选) -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">
