@@ -3,28 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v18.0 知乎极速源)</title>
+    <title>画美线上预约系统 (v18.0 最终修复版)</title>
     
-    <!-- 1. 引入 Excel 库 (使用知乎源) -->
-    <script src="https://unpkg.zhimg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 1. 引入 Excel 库 (更换为官方稳定源) -->
+    <script src="https://cdn.staticfile.net/xlsx/0.18.5/xlsx.full.min.js"></script>
     
-    <!-- 2. 引入 Bmob SDK (jsDelivr 源) -->
-<script src="https://cdn.jsdelivr.net/npm/bmob.js-sdk@3.19.0/dist/Bmob-3.19.0.min.js"></script>
-    
-    <!-- 3. 备用方案：如果上面加载失败，尝试手动加载 (错误处理逻辑) -->
+    <!-- 2. 引入 Bmob SDK (更换为官方正确包名 hydrogen-js-sdk) -->
+    <script src="https://cdn.staticfile.net/hydrogen-js-sdk/2.5.1/Bmob-2.5.1.min.js"></script>
+
+    <!-- 3. 错误监控 (辅助调试) -->
     <script>
         window.addEventListener('error', function(e) {
-            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('bmob')) {
-                console.warn('知乎源加载失败，尝试切换备用源...');
-                var script = document.createElement('script');
-                script.src = 'https://js.cdn.haah.net/npm/bmob.js-sdk@3.19.0/dist/Bmob-3.19.0.min.js';
-                document.head.appendChild(script);
+            // 如果 Bmob 未定义，说明 SDK 加载失败
+            if (e.message && e.message.includes('Bmob is not defined')) {
+                alert("🔴 严重错误：Bmob SDK 加载失败！\n\n可能是您的网络无法访问 CDN。\n请尝试连接手机热点，或刷新页面。");
             }
-        }, true);
+        });
     </script>
 
     <style>
-        /* ================= 样式部分 (保持 v12.0 完美版) ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -91,11 +89,8 @@
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
-        
-        /* 按钮组样式 */
         .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
         .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
-        
         .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
         .filter-item { flex: 1; min-width: 140px; }
         .filter-item label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text2); font-size: 0.8rem; }
@@ -1380,4 +1375,5 @@ console.log("SystemDB loaded");
 </script>
 </body>
 </html>
+
 
