@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v7.0 修正版)</title>
+    <title>画美线上预约系统 (v8.0 双维度筛选)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (保持不变) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -262,7 +262,7 @@
                         <div class="sel-grid" id="timeGrid"></div>
                     </div>
                     <div class="form-group">
-                        <!-- 🟢 修改：增加必填红星 🟢 -->
+                        <!-- 🟢 预约人必填 🟢 -->
                         <label>预约人 <span class="required">*</span></label>
                         <input type="text" class="form-control" id="inpOperator" placeholder="请输入预约操作人" required>
                     </div>
@@ -315,7 +315,7 @@
         </div>
     </div>
 
-    <!-- 页面3：预约记录 -->
+    <!-- 页面3：预约记录 (v8.0 双维度筛选) -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">
@@ -324,14 +324,26 @@
             
             <div class="overview-row" id="recOverview"></div>
             <div class="filter-bar">
+                <!-- 🟢 第一组：预约日期筛选 🟢 -->
                 <div class="filter-item">
-                    <label>开始日期</label>
+                    <label>预约日期 (起)</label>
                     <input type="date" class="form-control" id="recStart">
                 </div>
                 <div class="filter-item">
-                    <label>结束日期</label>
+                    <label>预约日期 (止)</label>
                     <input type="date" class="form-control" id="recEnd">
                 </div>
+                
+                <!-- 🟢 第二组：提交日期筛选 🟢 -->
+                <div class="filter-item">
+                    <label>提交日期 (起)</label>
+                    <input type="date" class="form-control" id="recCreateStart">
+                </div>
+                <div class="filter-item">
+                    <label>提交日期 (止)</label>
+                    <input type="date" class="form-control" id="recCreateEnd">
+                </div>
+
                 <div class="filter-item">
                     <label>项目</label>
                     <select class="form-control" id="recProject"><option value="">全部</option></select>
@@ -375,7 +387,6 @@
                 </div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
-                    <!-- 新增功能按钮 -->
                     <button class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
                     <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
                     <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
@@ -546,8 +557,6 @@
 
 <script>
 // ==================== LeanCloud 初始化 (国际版) ====================
-// ⚠️ 已为你填入密钥
-
 const APP_ID = "9vvVR2SwvoL7KZRJTfGI8FWu-MdYXbMMI";
 const APP_KEY = "I2IjTub3wD7zhF8bVe3q1V8N";
 const SERVER_URL = "https://9vvvr2sw.api.lncldglobal.com"; 
@@ -655,12 +664,29 @@ const SystemDB = {
         const c = AV.Object.createWithoutData('AppConfig', id);
         await c.destroy();
     },
+    // 🟢 修复：支持双维度筛选 🟢
     async getRecords(filter = {}) {
         const query = new AV.Query('AppRecord');
+        
+        // 维度1：预约日期
         if (filter.start) query.greaterThanOrEqualTo('date', filter.start);
         if (filter.end) query.lessThanOrEqualTo('date', filter.end);
+        
+        // 维度2：提交(创建)日期
+        if (filter.createStart) {
+            let d = new Date(filter.createStart);
+            d.setHours(0,0,0,0);
+            query.greaterThanOrEqualTo('createdAt', d);
+        }
+        if (filter.createEnd) {
+            let d = new Date(filter.createEnd);
+            d.setHours(23,59,59,999);
+            query.lessThanOrEqualTo('createdAt', d);
+        }
+
         if (filter.project) query.equalTo('project', filter.project);
         if (filter.status) query.equalTo('status', filter.status);
+        
         query.limit(1000);
         query.descending('createdAt');
         const results = await query.find();
@@ -674,7 +700,6 @@ const SystemDB = {
         rec.set('createdByName', currentUser.name);
         rec.set('createdByRole', currentUser.role);
         
-        // 🔴 关键权限设置：开放读写 🔴
         const acl = new AV.ACL();
         acl.setPublicReadAccess(true);
         acl.setPublicWriteAccess(true);
@@ -966,23 +991,19 @@ function pickSlot(s) {
 function checkSubmit() {
     const name = document.getElementById('inpName').value.trim();
     const phone = document.getElementById('inpPhone').value.trim();
-    // 🟢 修复：预约人必填校验 🟢
     const operator = document.getElementById('inpOperator').value.trim();
-    
     const phStatus = getPhoneStatus(phone);
     const pi = document.getElementById('inpPhone');
     const ph = document.getElementById('phoneHint');
     pi.className = 'form-control ' + (phone ? (phStatus.valid?'valid':'invalid') : '');
     ph.className = 'form-hint ' + phStatus.class;
     ph.textContent = phStatus.msg;
-    
-    // 校验条件增加 operator
     const can = name.length>=2 && phStatus.valid && bookState.project && bookState.date && bookState.slot && operator.length > 0;
     document.getElementById('btnSubmit').disabled = !can;
 }
 
 document.getElementById('inpName').addEventListener('input', checkSubmit);
-document.getElementById('inpOperator').addEventListener('input', checkSubmit); // 🟢 监听预约人输入
+document.getElementById('inpOperator').addEventListener('input', checkSubmit);
 document.getElementById('inpPhone').addEventListener('input', function() { this.value = this.value.replace(/[^\d]/g, ''); checkSubmit(); });
 
 document.getElementById('bookingForm').addEventListener('submit', async function(e) {
@@ -1082,12 +1103,10 @@ document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 function initRecords() {
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
-    // 🟢 修复：默认查询未来90天的记录，防止提交后看不到 🟢
+    // 默认查询未来90天
     const future = new Date(today); future.setDate(future.getDate() + 90);
-    
     document.getElementById('recStart').value = SystemDB.fmtDate(ago);
     document.getElementById('recEnd').value = SystemDB.fmtDate(future);
-    
     SystemDB.getConfigs().then(cfgs => {
         const sel = document.getElementById('recProject');
         sel.innerHTML = '<option value="">全部</option>';
@@ -1096,10 +1115,21 @@ function initRecords() {
     });
 }
 
+// 🟢 修复：加载记录时应用双维度筛选 🟢
 async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
-    const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
+    
+    // 获取所有筛选条件
+    const filter = { 
+        start: document.getElementById('recStart').value, 
+        end: document.getElementById('recEnd').value, 
+        createStart: document.getElementById('recCreateStart').value,
+        createEnd: document.getElementById('recCreateEnd').value,
+        project: document.getElementById('recProject').value, 
+        status: document.getElementById('recStatus').value 
+    };
+    
     let list = await SystemDB.getRecords(filter);
     if (currentUser.role === 'operator') { list = list.filter(r => r.createdBy === currentUser.username); }
     const confirmed = list.filter(r => r.status === 'confirmed').length;
@@ -1111,41 +1141,119 @@ async function loadRecords() {
         <div class="overview-card"><div class="overview-val" style="color:var(--success);">${success}</div><div class="overview-lbl">已成功</div></div>
         <div class="overview-card"><div class="overview-val" style="color:var(--danger);">${cancelled}</div><div class="overview-lbl">已取消</div></div>
     `;
-    document.getElementById('recSubtitle').textContent = `${filter.start||'-'} 至 ${filter.end||'-'} 共 ${list.length} 条`;
+    document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
+    
     if (list.length === 0) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
+    
     const canDel = hasPerm('delete');
     const canConfirm = hasPerm('confirm');
     const canCancel = hasPerm('cancel');
-    let html = `<table class="data-tbl"><thead><tr>${canDel ? '<th class="checkbox-col"><input type="checkbox" class="cb-input" onchange="toggleAllCb(this)"></th>' : ''}<th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>备注</th><th>状态</th><th>创建</th><th>操作</th></tr></thead><tbody>`;
+    
+    // 🟢 修复：增加“提交时间”列 🟢
+    let html = `<table class="data-tbl"><thead><tr>
+        ${canDel ? '<th class="checkbox-col"><input type="checkbox" class="cb-input" onchange="toggleAllCb(this)"></th>' : ''}
+        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>备注</th><th>状态</th><th>创建账户</th><th>提交时间</th><th>操作</th>
+    </tr></thead><tbody>`;
+    
     list.forEach(r => {
         const statMap = { confirmed: ['st-pending','待确认'], success: ['st-success','预约成功'], cancelled: ['st-cancel','已取消'] };
         const [sc, st] = statMap[r.status] || ['',''];
+        const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
+        
         let actionBtns = '';
         if (r.status === 'confirmed') {
             if (canConfirm) actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
             if (canCancel) actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         }
         if (canDel) actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
-        html += `<tr data-id="${r.id}">${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}<td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.operator||'-'}</td><td>${r.remark||'-'}</td><td><span class="status ${sc}">${st}</span></td><td>${r.createdByName||'-'}</td><td><div class="btn-group">${actionBtns}</div></td></tr>`;
+        html += `<tr data-id="${r.id}">
+            ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}
+            <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.operator||'-'}</td><td>${r.remark||'-'}</td>
+            <td><span class="status ${sc}">${st}</span></td>
+            <td>${r.createdByName||'-'}</td>
+            <td>${createTimeStr}</td>
+            <td><div class="btn-group">${actionBtns}</div></td>
+        </tr>`;
     });
     html += '</tbody></table>';
     tbl.innerHTML = html;
 }
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
-async function confirmRec(id) { if (!confirm('确认此预约？')) return; await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name }); loadRecords(); }
-async function cancelRec(id) { if (!confirm('取消此预约？')) return; await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() }); loadRecords(); }
-function deleteRec(id) { requireSuperPwd(async () => { await SystemDB.deleteRecord(id); loadRecords(); }); }
+async function confirmRec(id) {
+    if (!confirm('确认此预约？')) return;
+    try {
+        await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name });
+        alert('操作成功');
+        loadRecords();
+    } catch (err) {
+        alert('操作失败！\n错误信息: ' + err.message);
+    }
+}
+
+async function cancelRec(id) {
+    if (!confirm('取消此预约？')) return;
+    try {
+        await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() });
+        alert('操作成功');
+        loadRecords();
+    } catch (err) {
+        alert('操作失败！\n错误信息: ' + err.message);
+    }
+}
+
+function deleteRec(id) {
+    requireSuperPwd(async () => {
+        try {
+            await SystemDB.deleteRecord(id);
+            alert('删除成功');
+            loadRecords();
+        } catch (err) {
+            alert('删除失败！\n错误信息: ' + err.message);
+        }
+    });
+}
+
 function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
     if (selected.length === 0) { alert('请先选择要删除的记录！'); return; }
-    requireSuperPwd(async () => { if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) { await SystemDB.batchDeleteRecords(selected); loadRecords(); } });
+    requireSuperPwd(async () => {
+        if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) {
+            try {
+                await SystemDB.batchDeleteRecords(selected);
+                alert('批量删除成功');
+                loadRecords();
+            } catch (err) {
+                alert('批量删除失败！\n错误信息: ' + err.message);
+            }
+        }
+    });
 }
+
+// 🟢 修复：导出Excel包含提交时间 🟢
 async function exportExcel() {
     requireSuperPwd(async () => {
-        const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
+        const filter = { 
+            start: document.getElementById('recStart').value, 
+            end: document.getElementById('recEnd').value, 
+            createStart: document.getElementById('recCreateStart').value,
+            createEnd: document.getElementById('recCreateEnd').value,
+            project: document.getElementById('recProject').value, 
+            status: document.getElementById('recStatus').value 
+        };
         const list = await SystemDB.getRecords(filter);
         if (list.length === 0) { alert('没有数据！'); return; }
-        const data = list.map((r,i) => ({ '序号': i+1, '顾客姓名': r.name, '联系电话': r.phone, '预约项目': r.project, '预约日期': r.date, '预约时段': r.slot, '预约人': r.operator||'', '备注': r.remark||'', '状态': r.status, '创建时间': new Date(r.createdAt).toLocaleString() }));
+        const data = list.map((r,i) => ({ 
+            '序号': i+1, 
+            '顾客姓名': r.name, 
+            '联系电话': r.phone, 
+            '预约项目': r.project, 
+            '预约日期': r.date, 
+            '预约时段': r.slot, 
+            '预约人': r.operator||'', 
+            '备注': r.remark||'', 
+            '状态': r.status, 
+            '提交时间': new Date(r.createdAt).toLocaleString('zh-CN') 
+        }));
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '预约记录');
