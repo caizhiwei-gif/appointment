@@ -307,11 +307,17 @@
 
 <script>
 // ==================== 🟢 维格表(Vika) 配置 🟢 ====================
-// ⚠️ 必须修改这 4 项！！！
-const VIKA_TOKEN = "uskKIVNPRELxHGFCc9PnQZb";
-const DST_RECORDS = "dstgPwahY3fU31uAMm/viwgndFgW9Jgc";
-const DST_CONFIGS = "dst9KJZJj8nE2aVtmL/viwsyjvD2WCy2";
-const DST_USERS   = "dstaU2jlgkPNkpDyfE/viw5ExgFbTT1M";
+// ⚠️ 修正后的 ID (去掉了 /viw... 后缀)
+const VIKA_TOKEN  = "uskKIVNPRELxHGFCc9PnQZb";
+
+// 对应 AppRecord 表
+const DST_RECORDS = "dstgPwahY3fU31uAMm"; 
+
+// 对应 AppConfig 表
+const DST_CONFIGS = "dst9KJZJj8nE2aVtmL"; 
+
+// 对应 AppUser 表
+const DST_USERS   = "dstaU2jlgkPNkpDyfE";
 
 // ==================== Vika DB 封装层 (修复保存问题) ====================
 const VikaDB = {
@@ -718,3 +724,4 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
