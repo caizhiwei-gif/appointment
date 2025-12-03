@@ -9,7 +9,7 @@
     <!-- 引入 LeanCloud SDK -->
     <script src="//code.bdstatic.com/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (保持原样) ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -541,22 +541,16 @@
 
 <script>
 // ==================== LeanCloud 初始化 (国际版) ====================
-// ⚠️ 必填：请填入你在国际版控制台 (TDS) 获取的信息
+// ⚠️ 已为你填入密钥，请勿修改
 
 const APP_ID = "9vvVR2SwvoL7KZRJTfGI8FWu-MdYXbMMI";
 const APP_KEY = "I2IjTub3wD7zhF8bVe3q1V8N";
-
-// ⚠️ 必填：API域名
-// 国际版控制台 > 设置 > 域名 (App Services) 下面找 "REST API" 
-// 通常长这样： "https://你的8位ID.api.lncldglobal.com"
-// ❌ 不要填原来的 dpdns 或 qzz 域名
-// ✅ 必须带 https://，且最后不要带 /
 const SERVER_URL = "https://9vvvr2sw.api.lncldglobal.com"; 
 
 AV.init({
   appId: APP_ID,
   appKey: APP_KEY,
-  serverURLs: SERVER_URL  // 👈 这一行不要动！它会自动读取上面填的内容
+  serverURLs: SERVER_URL
 });
 
 // ==================== 全局状态 ====================
@@ -1255,5 +1249,3 @@ console.log("脚本加载完成");
 </script>
 </body>
 </html>
-
-
