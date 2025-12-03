@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v20.0 完美修复版)</title>
+    <title>画美线上预约系统 (v21.0 稳定版)</title>
     
-    <!-- 1. 引入 Excel 库 (国内极速源) -->
-    <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 1. 引入 Excel 库 (使用 SheetJS 官方源，确保稳定性) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* ================= 样式部分 (保持不变) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -56,7 +56,6 @@
         .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
         .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
-        .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
         .sel-item.selected { border-color: var(--primary); background: var(--primary); color: white; }
@@ -115,10 +114,6 @@
         .st-warn { background: #fffbe6; color: var(--warning); }
         .st-full { background: #fff1f0; color: var(--danger); }
         .tag { display: inline-block; padding: 2px 6px; background: var(--bg); border-radius: 4px; font-size: 0.7rem; margin: 1px; }
-        .creator-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
-        .creator-super { background: #f9f0ff; color: #722ed1; }
-        .creator-admin { background: #fff7e6; color: #fa8c16; }
-        .creator-op { background: #e6fffb; color: #13c2c2; }
         .overview-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 18px; }
         .overview-card { background: white; border-radius: 12px; padding: 16px; text-align: center; box-shadow: var(--shadow); }
         .overview-val { font-size: 1.8rem; font-weight: bold; color: var(--primary); }
@@ -181,7 +176,7 @@
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
     <div class="login-box">
-        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内极速版</p></div>
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内稳定版 v21.0</p></div>
         <form onsubmit="doLogin(event)">
             <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
             <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
@@ -205,18 +200,22 @@
         <div class="user-info"><span>👤 <span id="navUserName"></span></span><button class="btn-logout" onclick="doLogout()">退出</button></div>
     </nav>
 
-    <!-- 1. 预约挂号 -->
+    <!-- 1. 预约挂号 (修复：移除错位问题，强制流程) -->
     <div id="page-booking" class="page active">
         <div class="container">
             <div class="card" id="formCard">
-                <div class="card-header"><h2>📋 在线预约</h2><p>请填写信息完成预约</p></div>
+                <div class="card-header"><h2>📋 在线预约</h2><p>请按顺序选择：项目 > 日期 > 时段</p></div>
                 <form id="bookingForm">
                     <div class="form-group"><label>顾客姓名 <span class="required">*</span></label><input type="text" class="form-control" id="inpName" required></div>
-                    <div class="form-group"><label>联系电话 <span class="required">*</span></label><input type="tel" class="form-control" id="inpPhone" maxlength="11" required><div class="form-hint" id="phoneHint">请输入11位手机号码</div></div>
+                    <div class="form-group"><label>联系电话 <span class="required">*</span></label><input type="tel" class="form-control" id="inpPhone" maxlength="11" required><div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div></div>
                     <div class="form-group"><label>预约项目 <span class="required">*</span></label><select class="form-control" id="selProject" required><option value="">加载中...</option></select></div>
-                    <div class="form-group" id="modeGroup" style="display:none;"><label>选择方式</label><div class="sel-grid sel-grid-2"><div class="sel-item" onclick="pickMode('date')">📅 先选日期</div><div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div></div></div>
+                    
+                    <!-- 强制日期显示 -->
                     <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
+                    
+                    <!-- 强制时段显示 -->
                     <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
+                    
                     <div class="form-group"><label>预约人 <span class="required">*</span></label><input type="text" class="form-control" id="inpOperator" required></div>
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
                     <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
@@ -233,7 +232,7 @@
         </div>
     </div>
 
-    <!-- 2. 预约看板 -->
+    <!-- 2. 预约看板 (修复：下拉筛选自动填充) -->
     <div id="page-dashboard" class="page">
         <div class="container-wide">
             <div class="filter-bar">
@@ -245,7 +244,7 @@
         </div>
     </div>
 
-    <!-- 3. 预约记录 -->
+    <!-- 3. 预约记录 (修复：创建列/下拉/权限/导出) -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
@@ -258,21 +257,21 @@
                 <div class="filter-item"><label>项目</label><select class="form-control" id="recProject"><option value="">全部</option></select></div>
                 <div class="filter-item"><label>状态</label><select class="form-control" id="recStatus"><option value="">全部</option><option value="confirmed">待确认</option><option value="success">预约成功</option><option value="cancelled">已取消</option></select></div>
                 <div class="filter-btn"><button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button></div>
-                <div class="filter-btn" data-perm="export"><button class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button></div>
+                <div class="filter-btn" data-perm="export"><button type="button" class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button></div>
                 <div class="filter-btn" data-perm="batchdel"><button class="btn btn-danger" onclick="batchDelete()">🗑️ 批量删除</button></div>
             </div>
             <div class="card"><div class="card-header"><h2>📋 预约记录详情</h2><p id="recSubtitle">-</p></div><div class="tbl-wrap" id="recTable"></div></div>
         </div>
     </div>
 
-    <!-- 4. 系统配置 -->
+    <!-- 4. 系统配置 (修复：模版下载) -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
                 <div class="card-header"><h2>⚙️ 项目配置管理</h2><p>管理预约项目的配置规则</p></div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
-                    <button class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
+                    <button type="button" class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
                     <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
                     <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
                 </div>
@@ -281,14 +280,14 @@
         </div>
     </div>
     
-    <!-- 5. 用户管理 -->
+    <!-- 5. 用户管理 (修复：模版下载) -->
     <div id="page-users" class="page">
         <div class="container-wide">
             <div class="card">
                 <div class="card-header"><h2>👥 用户管理</h2><p>管理系统用户</p></div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openUserModal()">➕ 添加用户</button>
-                    <button class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载用户模板</button>
+                    <button type="button" class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载用户模板</button>
                     <button class="btn btn-primary" onclick="document.getElementById('fileUserImport').click()">📤 导入用户</button>
                     <input type="file" id="fileUserImport" accept=".xlsx,.xls" style="display:none" onchange="importUsers(event)">
                 </div>
@@ -361,6 +360,7 @@ const VikaDB = {
         if(filter.status) list = list.filter(r => r.status === filter.status);
         if(filter.start) list = list.filter(r => r.date >= filter.start);
         if(filter.end) list = list.filter(r => r.date <= filter.end);
+        // 创建日期筛选
         if(filter.createStart) { const d = new Date(filter.createStart).setHours(0,0,0,0); list = list.filter(r => r.createdAt >= d); }
         if(filter.createEnd) { const d = new Date(filter.createEnd).setHours(23,59,59,999); list = list.filter(r => r.createdAt <= d); }
         return list.sort((a,b) => b.createdAt - a.createdAt);
@@ -435,8 +435,8 @@ function showPage(name, el) {
     if (name === 'booking') initBooking(); if (name === 'dashboard') loadDashboard(); if (name === 'records') loadRecords(); if (name === 'config') loadCfgTable(); if (name === 'share') initShare(); if (name === 'users') loadUserTable();
 }
 
-// ==================== 预约模块 (修复错位问题) ====================
-let bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
+// ==================== 预约模块 (修复：强制顺序逻辑) ====================
+let bookState = { project: null, date: null, slot: null, cfg: null };
 async function initBooking() {
     const sel = document.getElementById('selProject');
     if (sel.options.length <= 1) {
@@ -446,49 +446,58 @@ async function initBooking() {
     resetBooking();
 }
 document.getElementById('selProject').addEventListener('change', async function() {
-    bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
-    document.getElementById('modeGroup').style.display = 'none'; document.getElementById('dateGroup').style.display = 'none'; document.getElementById('timeGroup').style.display = 'none';
+    bookState = { project: null, date: null, slot: null, cfg: null };
+    document.getElementById('dateGroup').style.display = 'none'; 
+    document.getElementById('timeGroup').style.display = 'none';
     if (this.value) {
         const cfgs = await VikaDB.getConfigs();
-        bookState.cfg = cfgs.find(c => c.name === this.value); bookState.project = this.value;
+        bookState.cfg = cfgs.find(c => c.name === this.value); 
+        bookState.project = this.value;
         await VikaDB.fetchActiveRecords(this.value);
-        document.getElementById('modeGroup').style.display = 'block';
+        document.getElementById('dateGroup').style.display = 'block';
+        renderDates();
     }
     checkSubmit();
 });
-function pickMode(mode) {
-    bookState.mode = mode; bookState.date = null; bookState.slot = null;
-    document.querySelectorAll('#modeGroup .sel-item').forEach((x,i) => x.classList.toggle('selected', (mode==='date' && i===0) || (mode==='time' && i===1)));
-    if (mode === 'date') { document.getElementById('dateGroup').style.display = 'block'; document.getElementById('timeGroup').style.display = 'none'; renderDates(); }
-    else { document.getElementById('timeGroup').style.display = 'block'; document.getElementById('dateGroup').style.display = 'none'; renderSlots(); }
-    checkSubmit();
-}
-async function renderDates(filterSlot) {
+
+async function renderDates() {
     const cfg = bookState.cfg; const dates = await VikaDB.getAvailDates(cfg);
     let html = '';
     dates.forEach(dt => {
         let avail = 0;
-        if (filterSlot) avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, filterSlot);
-        else cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
+        cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
         const full = avail <= 0; const sel = bookState.date === dt;
-        // 🟢 修复：onclick 参数加单引号，防止解析错误
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}"><div class="date-day">${new Date(dt).getDate()}</div><div class="date-wd">周${VikaDB.getWeekday(dt)}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
     });
     document.getElementById('dateGrid').innerHTML = html;
 }
-async function renderSlots(filterDate) {
+
+function pickDate(dt) {
+    bookState.date = dt; 
+    bookState.slot = null;
+    document.getElementById('timeGroup').style.display = 'block'; 
+    renderDates(); // 刷新高亮
+    renderSlots(); 
+    checkSubmit();
+}
+
+async function renderSlots() {
     const cfg = bookState.cfg;
     let html = '';
     cfg.slots.forEach(s => {
-        let avail = filterDate ? (cfg.capacity - VikaDB.countBookedLocal(bookState.project, filterDate, s)) : 999;
+        let avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, bookState.date, s);
         const full = avail <= 0; const sel = bookState.slot === s;
-        // 🟢 修复：onclick 参数加单引号
-        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}"><div>${s}</div><div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div></div>`;
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}"><div>${s}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
     });
     document.getElementById('timeGrid').innerHTML = html;
 }
-function pickDate(dt) { bookState.date = dt; document.getElementById('timeGroup').style.display = 'block'; renderSlots(dt); checkSubmit(); }
-function pickSlot(s) { bookState.slot = s; document.getElementById('dateGroup').style.display = 'block'; renderDates(s); checkSubmit(); }
+
+function pickSlot(s) { 
+    bookState.slot = s; 
+    renderSlots(); // 刷新高亮
+    checkSubmit(); 
+}
+
 function checkSubmit() {
     const name = document.getElementById('inpName').value.trim(); const phone = document.getElementById('inpPhone').value.trim();
     const ps = getPhoneStatus(phone); document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : ''); document.getElementById('phoneHint').textContent = ps.msg;
@@ -507,7 +516,7 @@ document.getElementById('bookingForm').addEventListener('submit', async function
         document.getElementById('formCard').style.display = 'none'; document.getElementById('successCard').style.display = 'block';
     } catch(err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = '确认预约'; }
 });
-function resetBooking() { document.getElementById('bookingForm').reset(); bookState = { project: null, date: null, slot: null, mode: null, cfg: null }; document.getElementById('modeGroup').style.display = 'none'; document.getElementById('dateGroup').style.display = 'none'; document.getElementById('timeGroup').style.display = 'none'; document.getElementById('formCard').style.display = 'block'; document.getElementById('successCard').style.display = 'none'; checkSubmit(); }
+function resetBooking() { document.getElementById('bookingForm').reset(); bookState = { project: null, date: null, slot: null, cfg: null }; document.getElementById('dateGroup').style.display = 'none'; document.getElementById('timeGroup').style.display = 'none'; document.getElementById('formCard').style.display = 'block'; document.getElementById('successCard').style.display = 'none'; checkSubmit(); }
 
 // ==================== 仪表盘 (修复下拉筛选) ====================
 async function loadDashboard() {
@@ -519,7 +528,7 @@ async function loadDashboard() {
     const dayRecords = all.filter(r => r.date === date && r.status !== 'cancelled');
     const cfgs = await VikaDB.getConfigs();
     
-    // 🟢 修复：自动填充时段下拉
+    // 🟢 自动填充时段下拉
     const allSlots = new Set();
     cfgs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
     const slotSel = document.getElementById('dashSlot');
@@ -542,11 +551,11 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 (修复电话/下拉/权限/Excel) ====================
+// ==================== 记录管理 (修复：下拉/列/权限/导出) ====================
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     
-    // 🟢 修复：加载配置填充下拉
+    // 🟢 加载配置填充下拉
     if(document.getElementById('recProject').options.length <= 1) {
         const cfgs = await VikaDB.getConfigs();
         document.getElementById('recProject').innerHTML = '<option value="">全部</option>';
@@ -568,18 +577,19 @@ async function loadRecords() {
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
     
-    // 🟢 修复：增加创建人和创建时间列
+    // 🟢 修复：显示列与中文状态
     let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
         const stCn = STATUS_MAP[r.status] || r.status;
         const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
-        // 🟢 修复：权限控制按钮
+        
+        // 🟢 修复：权限控制
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         if(currentUser.role !== 'operator') {
             btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
         }
-        // 🟢 修复：r.phone || '-' 处理undefined
+        
         html += `<tr data-id="${r.id}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td><td>${r.name}</td><td>${r.phone||'-'}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.createdBy||'-'}</td><td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td><td><div class="btn-group">${btns}</div></td></tr>`;
     });
     tbl.innerHTML = html + '</tbody></table>';
@@ -592,6 +602,7 @@ function batchDelete() { const ids = Array.from(document.querySelectorAll('.row-
 
 // 🟢 修复：导出Excel功能
 async function exportExcel() {
+    if(typeof XLSX === 'undefined') return alert('组件加载中，请稍后重试');
     const list = await VikaDB.getRecords({ 
         start: document.getElementById('recStart').value, 
         end: document.getElementById('recEnd').value, 
@@ -618,7 +629,7 @@ async function exportExcel() {
     XLSX.writeFile(wb, '预约数据.xlsx');
 }
 
-// ==================== 模版下载与导入 ====================
+// ==================== 模版下载与导入 (修复) ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
@@ -646,12 +657,14 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 function initShare() { const base = location.href.split('?')[0]; document.getElementById('userLink').value = base; document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`; }
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
 
-// 🟢 修复：恢复模版下载功能
+// 🟢 修复：模版下载 (确保XLSX存在)
 function downloadConfigTemplate() {
+    if(typeof XLSX === 'undefined') return alert('组件加载中');
     const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }];
     const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '项目模板'); XLSX.writeFile(wb, '项目配置导入模板.xlsx');
 }
 function downloadUserTemplate() {
+    if(typeof XLSX === 'undefined') return alert('组件加载中');
     const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }];
     const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '用户模板'); XLSX.writeFile(wb, '用户导入模板.xlsx');
 }
