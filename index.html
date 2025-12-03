@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v6.0 稳定版)</title>
+    <title>画美线上预约系统 (v6.1 修复版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- 2. 引入 LeanCloud SDK (国际版CDN) -->
+    <!-- 2. 引入 LeanCloud SDK -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (保持最美观版本) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -545,17 +545,23 @@
 
 <script>
 // ==================== LeanCloud 初始化 (国际版) ====================
-// ⚠️ 已为你填入密钥
+window.onerror = function(message, source, lineno, colno, error) {
+    alert("系统错误: " + message + "\nLine: " + lineno);
+};
 
 const APP_ID = "9vvVR2SwvoL7KZRJTfGI8FWu-MdYXbMMI";
 const APP_KEY = "I2IjTub3wD7zhF8bVe3q1V8N";
 const SERVER_URL = "https://9vvvr2sw.api.lncldglobal.com"; 
 
-AV.init({
-  appId: APP_ID,
-  appKey: APP_KEY,
-  serverURLs: SERVER_URL
-});
+try {
+    AV.init({
+      appId: APP_ID,
+      appKey: APP_KEY,
+      serverURLs: SERVER_URL
+    });
+} catch(e) {
+    alert("初始化失败，请检查网络或配置！");
+}
 
 // ==================== 全局状态 ====================
 let currentUser = null;
