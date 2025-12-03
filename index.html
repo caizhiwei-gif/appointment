@@ -9,7 +9,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* ================= 样式部分 (保持不变) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -56,9 +56,8 @@
         .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
         
-        /* 复用原有样式名，适配你的HTML结构 */
         .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
-        .sel-grid-2 { grid-template-columns: repeat(2, 1fr); } /* 两个选项并排 */
+        .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
         .sel-item.selected { border-color: var(--primary); background: var(--primary); color: white; }
@@ -181,7 +180,7 @@
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
     <div class="login-box">
-        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内双向选择版</p></div>
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内稳定版 v23.0</p></div>
         <form onsubmit="doLogin(event)">
             <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
             <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
@@ -264,11 +263,14 @@
         </div>
     </div>
 
-    <!-- 3. 预约记录 -->
+    <!-- 3. 预约记录 (统计增强版) -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
+            
+            <!-- 统计卡片区域 -->
             <div class="overview-row" id="recOverview"></div>
+            
             <div class="filter-bar">
                 <div class="filter-item"><label>预约日期 (起)</label><input type="date" class="form-control" id="recStart"></div>
                 <div class="filter-item"><label>预约日期 (止)</label><input type="date" class="form-control" id="recEnd"></div>
@@ -416,7 +418,7 @@ var currentUser = null; var superPwdCallback = null; var recordsCache = [];
 const PERMS = {
     superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
-    operator: ['booking','dashboard','records'] 
+    operator: ['booking','dashboard','records'] // 仅取消权限
 };
 function hasPerm(perm) { if (!currentUser) return false; return PERMS[currentUser.role]?.includes(perm) || false; }
 function applyPerms() {
@@ -698,7 +700,7 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 (修复：下拉/列/权限/导出) ====================
+// ==================== 记录管理 (统计增强版) ====================
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     
@@ -718,7 +720,17 @@ async function loadRecords() {
     });
     if (currentUser.role === 'operator') list = list.filter(r => r.createdBy === currentUser.username);
     
-    document.getElementById('recOverview').innerHTML = `<div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>`;
+    // 🟢 统计增强逻辑 🟢
+    const pending = list.filter(r => r.status === 'confirmed').length;
+    const success = list.filter(r => r.status === 'success').length;
+    const cancelled = list.filter(r => r.status === 'cancelled').length;
+
+    document.getElementById('recOverview').innerHTML = `
+        <div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:#1890ff;">${pending}</div><div class="overview-lbl">待确认</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:#52c41a;">${success}</div><div class="overview-lbl">已确认</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:#ff4d4f;">${cancelled}</div><div class="overview-lbl">已取消</div></div>
+    `;
     document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
@@ -852,4 +864,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
