@@ -1181,4 +1181,183 @@ async function exportExcel() {
         const list = await SystemDB.getRecords(filter);
         if (list.length === 0) { alert('没有数据！'); return; }
         const data = list.map((r,i) => ({ '序号': i+1, '顾客姓名': r.name, '联系电话': r.phone, '预约项目': r.project, '预约日期': r.date, '预约时段': r.slot, '预约人': r.operator||'', '备注': r.remark||'', '状态': r.status, '创建时间': new Date(r.createdAt).toLocaleString() }));
-        const ws = XLS
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '预约记录');
+        XLSX.writeFile(wb, `预约记录.xlsx`);
+    });
+}
+
+async function loadCfgTable() {
+    const list = await SystemDB.getConfigs();
+    let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>可约天数</th><th>时段容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
+    list.forEach(c => {
+        const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
+        html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}天</td><td>${c.capacity}人</td><td>${tags}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button></div></td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('cfgTable').innerHTML = html;
+}
+async function editCfg(id) { const cfgs = await SystemDB.getConfigs(); const cfg = cfgs.find(c => c.id === id); if (cfg) openCfgModal(cfg); }
+function openCfgModal(cfg) {
+    document.getElementById('cfgModalTitle').textContent = cfg ? '编辑项目' : '添加项目';
+    document.getElementById('cfgId').value = cfg ? cfg.id : '';
+    document.getElementById('cfgName').value = cfg ? cfg.name : '';
+    document.getElementById('cfgDays').value = cfg ? cfg.days : '';
+    document.getElementById('cfgCap').value = cfg ? cfg.capacity : '';
+    document.getElementById('cfgSlots').innerHTML = '';
+    if (cfg && cfg.slots) { cfg.slots.forEach(s => { const [a,b] = s.split('-'); addSlotRow(a,b); }); } else { addSlotRow('09:00','10:00'); }
+    document.getElementById('cfgModal').classList.add('show');
+}
+function addSlotRow(start, end) {
+    const div = document.createElement('div'); div.className = 'slot-row';
+    div.innerHTML = `<input type="time" class="form-control" value="${start||''}" required><span>至</span><input type="time" class="form-control" value="${end||''}" required><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+    document.getElementById('cfgSlots').appendChild(div);
+}
+async function saveCfg(e) {
+    e.preventDefault();
+    const id = document.getElementById('cfgId').value;
+    const name = document.getElementById('cfgName').value.trim();
+    const days = parseInt(document.getElementById('cfgDays').value);
+    const capacity = parseInt(document.getElementById('cfgCap').value);
+    const slots = [];
+    document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { const inputs = row.querySelectorAll('input'); if (inputs[0].value && inputs[1].value) slots.push(inputs[0].value + '-' + inputs[1].value); });
+    if (slots.length === 0) { alert('请添加时段'); return; }
+    slots.sort();
+    await SystemDB.saveConfig({ id, name, days, capacity, slots });
+    hideModal('cfgModal');
+    loadCfgTable();
+}
+async function delCfg(id) { if (!confirm('确定删除？')) return; await SystemDB.deleteConfig(id); loadCfgTable(); }
+async function exportAllData() {
+    const configs = await SystemDB.getConfigs();
+    const users = await SystemDB.getUsers();
+    const records = await SystemDB.getRecords({});
+    const data = { configs, users, records, exportTime: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `备份_${SystemDB.fmtDate(new Date())}.json`; a.click();
+}
+
+function initShare() {
+    const base = location.href.split('?')[0];
+    document.getElementById('userLink').value = base;
+    document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`;
+}
+function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制！'); }
+
+async function loadUserTable() {
+    const list = await SystemDB.getUsers();
+    const roleMap = { superadmin: ['ur-super','超级管理员'], admin: ['ur-admin','管理员'], operator: ['ur-op','预约人员'] };
+    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>密码状态</th><th>操作</th></tr></thead><tbody>`;
+    list.forEach(u => {
+        const [rc, rn] = roleMap[u.role] || ['',''];
+        const pwdSt = u.password ? '已设置' : '无密码';
+        html += `<tr><td>${u.username}</td><td>${u.name}</td><td><span class="user-role ${rc}">${rn}</span></td><td>${pwdSt}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button>${u.role !== 'superadmin' ? `<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}')">删除</button>` : ''}</div></td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('userTable').innerHTML = html;
+}
+async function editUser(id) { const users = await SystemDB.getUsers(); const user = users.find(u => u.id === id); if (user) openUserModal(user); }
+function openUserModal(user) {
+    document.getElementById('userModalTitle').textContent = user ? '编辑用户' : '添加用户';
+    document.getElementById('userId').value = user ? user.id : '';
+    document.getElementById('userUsername').value = user ? user.username : '';
+    document.getElementById('userName').value = user ? user.name : '';
+    document.getElementById('userPwd').value = '';
+    document.getElementById('userRole').value = user ? user.role : 'operator';
+    document.getElementById('userModal').classList.add('show');
+}
+async function saveUser(e) {
+    e.preventDefault();
+    const id = document.getElementById('userId').value;
+    const username = document.getElementById('userUsername').value.trim();
+    const name = document.getElementById('userName').value.trim();
+    const pwd = document.getElementById('userPwd').value;
+    const role = document.getElementById('userRole').value;
+    await SystemDB.saveUser({ id, username, name, password: pwd, role });
+    hideModal('userModal');
+    loadUserTable();
+}
+async function delUser(id) { if (!confirm('确定删除此用户？')) return; await SystemDB.deleteUser(id); loadUserTable(); }
+function downloadUserTemplate() {
+    const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '模板');
+    XLSX.writeFile(wb, '用户导入模板.xlsx');
+}
+function importUsers(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'array' });
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (let row of data) {
+                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
+                await SystemDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']||''), role: roleMap[row['角色']] || 'operator' });
+                count++;
+            }
+            alert(`已导入 ${count} 个用户`); loadUserTable();
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+}
+
+// 🟢 新增功能：下载项目配置模板 🟢
+function downloadConfigTemplate() {
+    const data = [{ 
+        '项目名称': '示例项目', 
+        '可约天数': 7, 
+        '时段容量': 5, 
+        '时段列表(逗号分隔)': '09:00-10:00, 10:00-11:00' 
+    }];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '项目模板');
+    XLSX.writeFile(wb, '项目配置导入模板.xlsx');
+}
+
+// 🟢 新增功能：导入项目配置 🟢
+function importConfigs(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'array' });
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (let row of data) {
+                const name = row['项目名称'];
+                const days = row['可约天数'];
+                const cap = row['时段容量'];
+                const slotsStr = row['时段列表(逗号分隔)'] || '';
+                
+                if(name && days && cap && slotsStr) {
+                    // 处理中文逗号和多余空格
+                    const slots = slotsStr.split(/[,，]/).map(s => s.trim()).filter(s=>s);
+                    await SystemDB.saveConfig({
+                        name: name,
+                        days: parseInt(days),
+                        capacity: parseInt(cap),
+                        slots: slots
+                    });
+                    count++;
+                }
+            }
+            alert(`已成功导入 ${count} 个项目配置！`);
+            loadCfgTable();
+        } catch (err) { alert('导入失败：' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+}
+
+document.addEventListener('DOMContentLoaded', checkSession);
+console.log("SystemDB loaded");
+</script>
+</body>
+</html>
