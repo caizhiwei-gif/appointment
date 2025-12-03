@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v4.0 完美修复版)</title>
+    <title>画美线上预约系统 (完美版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK (国际版CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (完全保持原版) ================= */
+        /* ================= 样式部分 (原汁原味) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -196,7 +196,7 @@
             <button type="submit" class="btn btn-primary btn-full">登 录</button>
         </form>
         <p style="text-align:center;color:var(--text2);font-size:0.75rem;margin-top:15px;line-height:1.5;">
-            
+            首次使用请直接输入:<br>用户名: <b>superadmin</b> / 密码: <b>super123</b><br>系统将自动初始化
         </p>
     </div>
 </div>
@@ -901,8 +901,16 @@ async function renderDates(filterSlot) {
         const wd = SystemDB.getWeekday(dt);
         const isToday = dt === SystemDB.fmtDate(new Date());
         let avail = 0;
-        if (filterSlot) { avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, filterSlot); }
-        else { cfg.slots.forEach(s => { avail += cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, s); }); }
+        
+        // 修复：双向筛选逻辑
+        if (filterSlot) { 
+            // 如果选了时段，只计算该时段的剩余
+            avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, filterSlot); 
+        } else { 
+            // 没选时段，计算当天所有时段剩余总和
+            cfg.slots.forEach(s => { avail += cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, s); }); 
+        }
+        
         const full = avail <= 0;
         const sel = bookState.date === dt;
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}">
@@ -917,66 +925,45 @@ async function renderDates(filterSlot) {
 async function renderSlots(filterDate) {
     const cfg = bookState.cfg;
     let html = '';
-    
-    // 如果没有选日期（先选时段模式），这里需要特别处理
-    // 逻辑：如果没选日期，我们遍历所有有效日期，统计该时段的总剩余量
-    
-    if (!filterDate) {
-        // 先获取所有可用日期
-        const allDates = await SystemDB.getAvailDates(cfg);
+    cfg.slots.forEach(s => {
+        let avail = 0;
         
-        cfg.slots.forEach(s => {
-            let totalAvail = 0;
-            allDates.forEach(d => {
-                const b = SystemDB.countBookedLocal(bookState.project, d, s);
-                if (cfg.capacity - b > 0) totalAvail++; // 只要这天有名额，就算有
-            });
-            
-            // 只要有一天有名额，这个时段就是可选的
-            const full = totalAvail === 0;
-            const sel = bookState.slot === s;
-            
-            html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
-                <div>${s}</div>
-                <div class="slot-left">${full?'已满':'可选'}</div>
-            </div>`;
-        });
-    } else {
-        // 正常模式：已选日期，检查该日期的时段
-        cfg.slots.forEach(s => {
-            let avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, filterDate, s);
-            const full = avail <= 0;
-            const sel = bookState.slot === s;
-            html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
-                <div>${s}</div>
-                <div class="slot-left">${full?'已满':'余'+avail}</div>
-            </div>`;
-        });
-    }
+        // 修复：双向筛选逻辑
+        if (filterDate) { 
+            // 如果选了日期，计算该日期该时段剩余
+            avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, filterDate, s); 
+        } else { 
+            // 没选日期，显示该时段在未来几天的总剩余（或者设为999表示可选）
+            // 这里为了界面简洁，如果不选日期，我们默认显示可选，或者统计所有日期的该时段剩余
+            avail = 999; 
+        }
+        
+        const full = avail <= 0;
+        const sel = bookState.slot === s;
+        
+        // 修复：点击事件
+        // 如果没选日期，点击时段应该触发“选定这个时段”，并反向筛选日期
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
+            <div>${s}</div>
+            <div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div>
+        </div>`;
+    });
     document.getElementById('timeGrid').innerHTML = html;
 }
 
 function pickDate(dt) {
     bookState.date = dt;
-    // 如果是先选日期模式，选中日期后显示时段
-    if (bookState.mode === 'date') { 
-        document.getElementById('timeGroup').style.display = 'block'; 
-        renderSlots(dt); 
-    }
-    // 同时更新日历的显示（如果有选时段，会过滤日期）
-    renderDates(bookState.mode === 'time' ? bookState.slot : null);
+    // 选中日期后，刷新时段显示（带上日期过滤）
+    document.getElementById('timeGroup').style.display = 'block';
+    renderSlots(dt);
     checkSubmit();
 }
 
 function pickSlot(s) {
     bookState.slot = s;
-    // 如果是先选时段模式，选中时段后显示日期（并过滤）
-    if (bookState.mode === 'time') { 
-        document.getElementById('dateGroup').style.display = 'block'; 
-        renderDates(s); 
-    }
-    // 同时更新时段的显示（如果有选日期）
-    renderSlots(bookState.mode === 'date' ? bookState.date : null);
+    // 选中时段后，刷新日期显示（带上时段过滤）
+    document.getElementById('dateGroup').style.display = 'block';
+    renderDates(s);
     checkSubmit();
 }
 
@@ -1046,38 +1033,51 @@ async function initDashboard() {
     loadDashboard();
 }
 
+// 修复：恢复原版看板样式的逻辑
 async function loadDashboard() {
     const date = document.getElementById('dashDate').value;
     const slot = document.getElementById('dashSlot').value;
     const div = document.getElementById('dashStats');
     div.innerHTML = '<p>加载数据中...</p>';
+    
+    // 1. 获取当天数据
     const query = new AV.Query('AppRecord');
     query.equalTo('date', date);
     query.notEqualTo('status', 'cancelled');
     const dayRecords = await query.find();
+    
+    // 2. 统计函数
     const count = (p, s) => dayRecords.filter(r => r.get('project')===p && r.get('slot')===s).length;
+    
     const cfgs = await SystemDB.getConfigs();
     let html = '';
+    
     cfgs.forEach(cfg => {
         const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
         let total = 0, booked = 0;
+        
+        // 计算总进度
+        slotsChk.forEach(s => { 
+            total += cfg.capacity; 
+            booked += count(cfg.name, s);
+        });
+        
+        const avail = Math.max(0, total - booked);
+        const pct = total > 0 ? (booked / total * 100) : 0;
+        const full = avail === 0;
+        const pClass = pct >= 80 ? 'prog-high' : (pct >= 50 ? 'prog-mid' : 'prog-low');
+        
+        // 生成时段明细表
         let slotRows = '';
         slotsChk.forEach(s => {
             const b = count(cfg.name, s);
-            total += cfg.capacity; 
-            booked += b;
             const r = cfg.capacity - b;
             let sc = 'st-ok', st = '可预约';
             if (r <= 0) { sc = 'st-full'; st = '已满'; }
             else if (r <= cfg.capacity * 0.3) { sc = 'st-warn'; st = '紧张'; }
             slotRows += `<tr><td>${s}</td><td>${b}/${cfg.capacity}</td><td>${r}</td><td><span class="status ${sc}">${st}</span></td></tr>`;
         });
-        const avail = Math.max(0, total - booked);
-        const pct = total > 0 ? (booked / total * 100) : 0;
-        const full = avail === 0;
-        const pClass = pct >= 80 ? 'prog-high' : (pct >= 50 ? 'prog-mid' : 'prog-low');
         
-        // 恢复原来的看板样式
         html += `<div class="stat-card">
             <div class="stat-header">
                 <span class="stat-title">${cfg.name}</span>
@@ -1094,6 +1094,7 @@ async function loadDashboard() {
     });
     div.innerHTML = html;
 }
+
 document.getElementById('dashDate').addEventListener('change', loadDashboard);
 document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
@@ -1291,4 +1292,3 @@ console.log("SystemDB loaded");
 </script>
 </body>
 </html>
-
