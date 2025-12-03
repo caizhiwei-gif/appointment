@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v8.0 双维度筛选)</title>
+    <title>画美线上预约系统 (v9.0 操作自由版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK -->
@@ -664,23 +664,18 @@ const SystemDB = {
         const c = AV.Object.createWithoutData('AppConfig', id);
         await c.destroy();
     },
-    // 🟢 修复：支持双维度筛选 🟢
     async getRecords(filter = {}) {
         const query = new AV.Query('AppRecord');
         
-        // 维度1：预约日期
         if (filter.start) query.greaterThanOrEqualTo('date', filter.start);
         if (filter.end) query.lessThanOrEqualTo('date', filter.end);
         
-        // 维度2：提交(创建)日期
         if (filter.createStart) {
-            let d = new Date(filter.createStart);
-            d.setHours(0,0,0,0);
+            let d = new Date(filter.createStart); d.setHours(0,0,0,0);
             query.greaterThanOrEqualTo('createdAt', d);
         }
         if (filter.createEnd) {
-            let d = new Date(filter.createEnd);
-            d.setHours(23,59,59,999);
+            let d = new Date(filter.createEnd); d.setHours(23,59,59,999);
             query.lessThanOrEqualTo('createdAt', d);
         }
 
@@ -1103,7 +1098,6 @@ document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 function initRecords() {
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
-    // 默认查询未来90天
     const future = new Date(today); future.setDate(future.getDate() + 90);
     document.getElementById('recStart').value = SystemDB.fmtDate(ago);
     document.getElementById('recEnd').value = SystemDB.fmtDate(future);
@@ -1120,7 +1114,6 @@ async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
     
-    // 获取所有筛选条件
     const filter = { 
         start: document.getElementById('recStart').value, 
         end: document.getElementById('recEnd').value, 
@@ -1149,7 +1142,6 @@ async function loadRecords() {
     const canConfirm = hasPerm('confirm');
     const canCancel = hasPerm('cancel');
     
-    // 🟢 修复：增加“提交时间”列 🟢
     let html = `<table class="data-tbl"><thead><tr>
         ${canDel ? '<th class="checkbox-col"><input type="checkbox" class="cb-input" onchange="toggleAllCb(this)"></th>' : ''}
         <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>预约人</th><th>备注</th><th>状态</th><th>创建账户</th><th>提交时间</th><th>操作</th>
@@ -1160,12 +1152,18 @@ async function loadRecords() {
         const [sc, st] = statMap[r.status] || ['',''];
         const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
         
+        // 🟢 修复：按钮逻辑 - 全状态允许操作 🟢
         let actionBtns = '';
-        if (r.status === 'confirmed') {
-            if (canConfirm) actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
-            if (canCancel) actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+        if (canConfirm && r.status !== 'success') {
+            // 如果不是成功状态，就可以点击“确认”（包括待确认和已取消的）
+            actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
+        }
+        if (canCancel && r.status !== 'cancelled') {
+            // 如果不是已取消状态，就可以点击“取消”（包括待确认和已成功的）
+            actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         }
         if (canDel) actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+        
         html += `<tr data-id="${r.id}">
             ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}
             <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.operator||'-'}</td><td>${r.remark||'-'}</td>
@@ -1229,7 +1227,6 @@ function batchDelete() {
     });
 }
 
-// 🟢 修复：导出Excel包含提交时间 🟢
 async function exportExcel() {
     requireSuperPwd(async () => {
         const filter = { 
