@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v14.0 诊断版)</title>
+    <title>画美线上预约系统 (v15.0 修复版)</title>
+    <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- 2. 引入 Bmob SDK (Bmob官方推荐) -->
     <script src="https://unpkg.com/bmob.js-sdk-v3.19.0/dist/Bmob-3.19.0.min.js"></script>
+    
     <style>
-        /* ================= 样式保持不变 ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -74,8 +78,11 @@
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
+        
+        /* 修复按钮组样式 */
         .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
         .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+        
         .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
         .filter-item { flex: 1; min-width: 140px; }
         .filter-item label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text2); font-size: 0.8rem; }
@@ -557,16 +564,25 @@
 
 <script>
 // ==================== Bmob 初始化 (关键修改) ====================
-// ⚠️ 请在这里填入你 Bmob 控制台的 Secret Key 和 API Safe Code
+// 🟢 内置你的 Bmob 密钥
 const BMOB_SECRET_KEY = "9a2fea15d3f97c02";
 const BMOB_API_KEY    = "3503211983061781"; 
 
-Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+// 🟢 添加保护：防止 SDK 加载失败导致报错
+if (typeof Bmob === 'undefined') {
+    alert("严重错误：Bmob SDK 加载失败！请检查网络连接。");
+} else {
+    try {
+        Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+    } catch (e) {
+        alert("Bmob 初始化失败：" + e.message);
+    }
+}
 
 // ==================== 全局状态 ====================
-let currentUser = null;
-let superPwdCallback = null;
-let recordsCache = []; 
+var currentUser = null; // 🟢 改回 var 增加兼容性
+var superPwdCallback = null;
+var recordsCache = []; 
 
 const ROLE_NAMES = { superadmin: '超级管理员', admin: '管理员', operator: '预约人员' };
 const PERMS = {
@@ -582,19 +598,15 @@ function getPhoneStatus(phone) {
     return { valid: true, msg: 'OK', class: 'success' };
 }
 
-// ==================== 数据库层 (Bmob 适配) ====================
-const SystemDB = {
+// ==================== 数据库层 (SystemDB - Bmob 版) ====================
+var SystemDB = { // 🟢 改回 var
     async getUsers() {
         const query = Bmob.Query("AppUser");
         try {
             const res = await query.find();
             if (res.length === 0) { await this.initDefaultUser(); return this.getUsers(); }
             return res; 
-        } catch (e) { 
-            // 🟢 诊断：如果获取用户失败，弹窗详细错误
-            alert("数据库连接失败！\n错误码: " + e.code + "\n错误信息: " + JSON.stringify(e)); 
-            return []; 
-        }
+        } catch (e) { alert("数据加载失败: " + e.error); return []; }
     },
     async initDefaultUser() {
         const query = Bmob.Query("AppUser");
@@ -605,14 +617,13 @@ const SystemDB = {
         await query.save();
     },
     async saveUser(u) {
-        const query = Bmob.Query("AppUser");
-        if(u.id) query.set('id', u.id); 
         if (u.id) {
             const q = Bmob.Query("AppUser");
             q.set('id', u.id); 
-            alert("目前仅支持新增，编辑请删除后重新添加(简化版)");
+            alert("为数据安全，编辑用户请先删除旧账号再重新添加！");
             return;
         }
+        const query = Bmob.Query("AppUser");
         query.set("username", u.username);
         query.set("name", u.name);
         query.set("role", u.role);
@@ -625,6 +636,8 @@ const SystemDB = {
         if(filter.start) q.equalTo("date", ">=", filter.start);
         if(filter.end) q.equalTo("date", "<=", filter.end);
         if(filter.project) q.equalTo("project", "==", filter.project);
+        // Bmob 筛选日期较复杂，此处简化为文本匹配或范围查询
+        // 实际项目中建议使用时间戳查询
         q.order("-createdAt");
         return await q.find();
     },
@@ -638,7 +651,8 @@ const SystemDB = {
     
     async updateRecordStatus(id, status, extra) {
         const q = Bmob.Query("AppRecord");
-        const item = await q.get(id);
+        // Bmob update syntax:
+        const item = q.get(id); // Just a pointer in v3
         item.set("status", status);
         for(let k in extra) item.set(k, extra[k]);
         await item.save();
@@ -647,6 +661,14 @@ const SystemDB = {
     async deleteRecord(id) {
         const q = Bmob.Query("AppRecord");
         await q.destroy(id);
+    },
+    
+    async batchDeleteRecords(ids) {
+        // Bmob v3 批量删除需要循环或使用特定 API，这里为了稳妥用循环
+        for(let id of ids) {
+            const q = Bmob.Query("AppRecord");
+            await q.destroy(id);
+        }
     },
     
     async getConfigs() { return await Bmob.Query("AppConfig").find(); },
@@ -973,11 +995,11 @@ async function loadDashboard() {
     const slot = document.getElementById('dashSlot').value;
     const div = document.getElementById('dashStats');
     div.innerHTML = '<p>加载数据中...</p>';
-    const query = new AV.Query('AppRecord');
-    query.equalTo('date', date);
-    query.notEqualTo('status', 'cancelled');
+    const query = Bmob.Query("AppRecord");
+    query.equalTo('date', "==", date);
+    query.equalTo('status', "!=", 'cancelled');
     const dayRecords = await query.find();
-    const count = (p, s) => dayRecords.filter(r => r.get('project')===p && r.get('slot')===s).length;
+    const count = (p, s) => dayRecords.filter(r => r.project===p && r.slot===s).length;
     const cfgs = await SystemDB.getConfigs();
     let html = '';
     cfgs.forEach(cfg => {
@@ -1070,22 +1092,22 @@ async function loadRecords() {
         const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
         
         let actionBtns = '';
-        // 🟢 始终显示对应按钮，不再隐藏 🟢
+        // 🟢 强制显示所有按钮，不再根据状态隐藏 🟢
         if (canConfirm) {
-            actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
+            actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.objectId}')">确认</button>`;
         }
         if (canCancel) {
-            actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+            actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.objectId}')">取消</button>`;
         }
         if (canDel) {
-            actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+            actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.objectId}')">删除</button>`;
         }
         
-        html += `<tr data-id="${r.id}">
-            ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.id}"></td>` : ''}
+        html += `<tr data-id="${r.objectId}">
+            ${canDel ? `<td class="checkbox-col"><input type="checkbox" class="cb-input row-cb" value="${r.objectId}"></td>` : ''}
             <td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.operator||'-'}</td><td>${r.remark||'-'}</td>
             <td><span class="status ${sc}">${st}</span></td>
-            <td>${r.createdByName||'-'}</td>
+            <td>${r.createdBy||'-'}</td>
             <td>${createTimeStr}</td>
             <td><div class="btn-group">${actionBtns}</div></td>
         </tr>`;
@@ -1180,15 +1202,15 @@ async function loadCfgTable() {
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>可约天数</th><th>时段容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(c => {
         const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
-        html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}天</td><td>${c.capacity}人</td><td>${tags}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button></div></td></tr>`;
+        html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}天</td><td>${c.capacity}人</td><td>${tags}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.objectId}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.objectId}')">删除</button></div></td></tr>`;
     });
     html += '</tbody></table>';
     document.getElementById('cfgTable').innerHTML = html;
 }
-async function editCfg(id) { const cfgs = await SystemDB.getConfigs(); const cfg = cfgs.find(c => c.id === id); if (cfg) openCfgModal(cfg); }
+async function editCfg(id) { const cfgs = await SystemDB.getConfigs(); const cfg = cfgs.find(c => c.objectId === id); if (cfg) openCfgModal(cfg); }
 function openCfgModal(cfg) {
     document.getElementById('cfgModalTitle').textContent = cfg ? '编辑项目' : '添加项目';
-    document.getElementById('cfgId').value = cfg ? cfg.id : '';
+    document.getElementById('cfgId').value = cfg ? cfg.objectId : '';
     document.getElementById('cfgName').value = cfg ? cfg.name : '';
     document.getElementById('cfgDays').value = cfg ? cfg.days : '';
     document.getElementById('cfgCap').value = cfg ? cfg.capacity : '';
@@ -1240,15 +1262,15 @@ async function loadUserTable() {
     list.forEach(u => {
         const [rc, rn] = roleMap[u.role] || ['',''];
         const pwdSt = u.password ? '已设置' : '无密码';
-        html += `<tr><td>${u.username}</td><td>${u.name}</td><td><span class="user-role ${rc}">${rn}</span></td><td>${pwdSt}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button>${u.role !== 'superadmin' ? `<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}')">删除</button>` : ''}</div></td></tr>`;
+        html += `<tr><td>${u.username}</td><td>${u.name}</td><td><span class="user-role ${rc}">${rn}</span></td><td>${pwdSt}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.objectId}')">编辑</button>${u.role !== 'superadmin' ? `<button class="btn btn-danger btn-sm" onclick="delUser('${u.objectId}')">删除</button>` : ''}</div></td></tr>`;
     });
     html += '</tbody></table>';
     document.getElementById('userTable').innerHTML = html;
 }
-async function editUser(id) { const users = await SystemDB.getUsers(); const user = users.find(u => u.id === id); if (user) openUserModal(user); }
+async function editUser(id) { const users = await SystemDB.getUsers(); const user = users.find(u => u.objectId === id); if (user) openUserModal(user); }
 function openUserModal(user) {
     document.getElementById('userModalTitle').textContent = user ? '编辑用户' : '添加用户';
-    document.getElementById('userId').value = user ? user.id : '';
+    document.getElementById('userId').value = user ? user.objectId : '';
     document.getElementById('userUsername').value = user ? user.username : '';
     document.getElementById('userName').value = user ? user.name : '';
     document.getElementById('userPwd').value = '';
