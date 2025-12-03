@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (Vika国内修复版)</title>
+    <title>画美线上预约系统 (v20.0 完美修复版)</title>
     
     <!-- 1. 引入 Excel 库 (国内极速源) -->
     <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* ================= 样式部分 (保持 v12.0 完美版) ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -205,6 +205,7 @@
         <div class="user-info"><span>👤 <span id="navUserName"></span></span><button class="btn-logout" onclick="doLogout()">退出</button></div>
     </nav>
 
+    <!-- 1. 预约挂号 -->
     <div id="page-booking" class="page active">
         <div class="container">
             <div class="card" id="formCard">
@@ -232,6 +233,7 @@
         </div>
     </div>
 
+    <!-- 2. 预约看板 -->
     <div id="page-dashboard" class="page">
         <div class="container-wide">
             <div class="filter-bar">
@@ -243,6 +245,7 @@
         </div>
     </div>
 
+    <!-- 3. 预约记录 -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
@@ -250,6 +253,8 @@
             <div class="filter-bar">
                 <div class="filter-item"><label>预约日期 (起)</label><input type="date" class="form-control" id="recStart"></div>
                 <div class="filter-item"><label>预约日期 (止)</label><input type="date" class="form-control" id="recEnd"></div>
+                <div class="filter-item"><label>创建日期 (起)</label><input type="date" class="form-control" id="createStart"></div>
+                <div class="filter-item"><label>创建日期 (止)</label><input type="date" class="form-control" id="createEnd"></div>
                 <div class="filter-item"><label>项目</label><select class="form-control" id="recProject"><option value="">全部</option></select></div>
                 <div class="filter-item"><label>状态</label><select class="form-control" id="recStatus"><option value="">全部</option><option value="confirmed">待确认</option><option value="success">预约成功</option><option value="cancelled">已取消</option></select></div>
                 <div class="filter-btn"><button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button></div>
@@ -260,6 +265,7 @@
         </div>
     </div>
 
+    <!-- 4. 系统配置 -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -275,6 +281,7 @@
         </div>
     </div>
     
+    <!-- 5. 用户管理 -->
     <div id="page-users" class="page">
         <div class="container-wide">
             <div class="card">
@@ -290,6 +297,7 @@
         </div>
     </div>
     
+    <!-- 6. 分享 -->
     <div id="page-share" class="page">
         <div class="container">
             <div class="card">
@@ -307,184 +315,94 @@
 
 <script>
 // ==================== 🟢 维格表(Vika) 配置 🟢 ====================
-// ⚠️ 修正后的 ID (去掉了 /viw... 后缀)
 const VIKA_TOKEN  = "uskKIVNPRELxHGFCc9PnQZb";
-
-// 对应 AppRecord 表
 const DST_RECORDS = "dstgPwahY3fU31uAMm"; 
-
-// 对应 AppConfig 表
 const DST_CONFIGS = "dst9KJZJj8nE2aVtmL"; 
+const DST_USERS   = "dstaU2jlgkPNkpDyfE"; 
 
-// 对应 AppUser 表
-const DST_USERS   = "dstaU2jlgkPNkpDyfE";
+const STATUS_MAP = { 'confirmed': '待确认', 'success': '预约成功', 'cancelled': '已取消' };
 
-// ==================== Vika DB 封装层 (修复保存问题) ====================
+// ==================== Vika DB 封装层 ====================
 const VikaDB = {
-    // 通用请求函数
     async request(dstId, method = 'GET', data = null, recordId = null) {
         let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
-        // 如果是 GET 请求，获取所有数据
         if (method === 'GET') url += '?pageNum=1&pageSize=1000';
-        
-        const options = {
-            method,
-            headers: { 
-                'Authorization': `Bearer ${VIKA_TOKEN}`, 
-                'Content-Type': 'application/json' 
-            }
-        };
-
-        // 构造 Vika 要求的特殊 JSON 结构
+        const options = { method, headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' } };
         if (data) {
-            if (method === 'POST') {
-                // 新增：{ records: [ { fields: {...} } ] }
-                options.body = JSON.stringify({ records: [{ fields: data }] });
-            } else if (method === 'PATCH') {
-                // 更新：{ records: [ { recordId: "...", fields: {...} } ] }
-                if (!recordId) throw new Error("更新操作需要 recordId");
-                options.body = JSON.stringify({ records: [{ recordId: recordId, fields: data }] });
-            }
+            if (method === 'POST') options.body = JSON.stringify({ records: [{ fields: data }] });
+            else if (method === 'PATCH') options.body = JSON.stringify({ records: [{ recordId: recordId, fields: data }] });
         }
-        
-        // 删除操作单独处理 Query String
-        if (method === 'DELETE') {
-            url += `?recordIds=${recordId}`; // recordId 可以是逗号分隔的字符串
-            delete options.body;
-        }
-
+        if (method === 'DELETE') { url += `?recordIds=${recordId}`; delete options.body; }
         const res = await fetch(url, options).then(r => r.json());
-        if (!res.success) {
-            console.error("Vika Error:", res);
-            throw new Error(res.message);
-        }
+        if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
         return res.data ? res.data.records : [];
     },
-
-    // --- 用户相关 ---
-    async getUsers() {
-        const rows = await this.request(DST_USERS);
-        return rows.map(r => ({ ...r.fields, id: r.recordId })); // 映射 recordId 为 id
-    },
+    async getUsers() { return (await this.request(DST_USERS)).map(r => ({ ...r.fields, id: r.recordId })); },
     async saveUser(u) {
-        // 构造符合 Vika 的数据
         const fields = { username: u.username, name: u.name, role: u.role };
         if(u.password) fields.password = u.password;
-
-        if (u.id) {
-            // 更新
-            await this.request(DST_USERS, 'PATCH', fields, u.id);
-        } else {
-            // 新增
-            await this.request(DST_USERS, 'POST', fields);
-        }
+        u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
     },
-    async deleteUser(id) {
-        await this.request(DST_USERS, 'DELETE', null, id);
-    },
-
-    // --- 配置相关 ---
+    async deleteUser(id) { await this.request(DST_USERS, 'DELETE', null, id); },
     async getConfigs() {
-        const rows = await this.request(DST_CONFIGS);
-        return rows.map(r => ({ 
-            ...r.fields, 
-            id: r.recordId,
-            // 兼容处理：Vika 存 slots 可能是文本，需要分割
+        return (await this.request(DST_CONFIGS)).map(r => ({ 
+            ...r.fields, id: r.recordId, 
             slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : []
         }));
     },
     async saveConfig(c) {
-        const fields = { 
-            name: c.name, 
-            days: parseInt(c.days), 
-            capacity: parseInt(c.capacity), 
-            slots: c.slots.join(',') 
-        };
-        if (c.id) {
-            await this.request(DST_CONFIGS, 'PATCH', fields, c.id);
-        } else {
-            await this.request(DST_CONFIGS, 'POST', fields);
-        }
+        const fields = { name: c.name, days: parseInt(c.days), capacity: parseInt(c.capacity), slots: c.slots.join(',') };
+        c.id ? await this.request(DST_CONFIGS, 'PATCH', fields, c.id) : await this.request(DST_CONFIGS, 'POST', fields);
     },
-    async deleteConfig(id) {
-        await this.request(DST_CONFIGS, 'DELETE', null, id);
-    },
-
-    // --- 记录相关 ---
+    async deleteConfig(id) { await this.request(DST_CONFIGS, 'DELETE', null, id); },
     async getRecords(filter) {
-        const rows = await this.request(DST_RECORDS);
-        let list = rows.map(r => ({ ...r.fields, id: r.recordId, createdAt: r.createdAt }));
-        // 前端筛选
+        let list = (await this.request(DST_RECORDS)).map(r => ({ ...r.fields, id: r.recordId, createdAt: r.createdAt }));
         if(filter.project) list = list.filter(r => r.project === filter.project);
+        if(filter.status) list = list.filter(r => r.status === filter.status);
         if(filter.start) list = list.filter(r => r.date >= filter.start);
         if(filter.end) list = list.filter(r => r.date <= filter.end);
+        if(filter.createStart) { const d = new Date(filter.createStart).setHours(0,0,0,0); list = list.filter(r => r.createdAt >= d); }
+        if(filter.createEnd) { const d = new Date(filter.createEnd).setHours(23,59,59,999); list = list.filter(r => r.createdAt <= d); }
         return list.sort((a,b) => b.createdAt - a.createdAt);
     },
     async addRecord(r) {
-        const fields = {
-            name: r.name, phone: r.phone, project: r.project, date: r.date,
-            slot: r.slot, operator: r.operator, remark: r.remark, 
-            status: 'confirmed', createdBy: currentUser.username
-        };
-        const res = await this.request(DST_RECORDS, 'POST', fields);
-        const saved = res[0];
-        return { ...saved.fields, id: saved.recordId };
+        const fields = { ...r, status: 'confirmed', createdBy: currentUser.username };
+        const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
+        return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
     },
-    async updateRecordStatus(id, status) {
-        await this.request(DST_RECORDS, 'PATCH', { status: status }, id);
-    },
-    async deleteRecord(id) {
-        await this.request(DST_RECORDS, 'DELETE', null, id);
-    },
-    async batchDeleteRecords(ids) {
-        const idsParam = ids.join(',');
-        await this.request(DST_RECORDS, 'DELETE', null, idsParam);
-    },
-
-    // --- 业务逻辑 ---
+    async updateRecordStatus(id, status) { await this.request(DST_RECORDS, 'PATCH', { status: status }, id); },
+    async deleteRecord(id) { await this.request(DST_RECORDS, 'DELETE', null, id); },
+    async batchDeleteRecords(ids) { await this.request(DST_RECORDS, 'DELETE', null, ids.join(',')); },
     async fetchActiveRecords(pName) {
-        const all = await this.getRecords({});
-        recordsCache = all.filter(r => r.project === pName && r.status !== 'cancelled');
+        recordsCache = (await this.getRecords({})).filter(r => r.project === pName && r.status !== 'cancelled');
     },
-    countBookedLocal(name, date, slot) {
-        return recordsCache.filter(r => r.project===name && r.date===date && r.slot===slot).length;
-    },
+    countBookedLocal(name, date, slot) { return recordsCache.filter(r => r.project===name && r.date===date && r.slot===slot).length; },
     async canBookAsync(name, date, slot) {
         await this.fetchActiveRecords(name);
         const count = this.countBookedLocal(name, date, slot);
-        const cfgs = await this.getConfigs();
-        const cfg = cfgs.find(c => c.name === name);
+        const cfg = (await this.getConfigs()).find(c => c.name === name);
         if(!cfg) return {ok:false, msg:'项目不存在'};
         return { ok: (cfg.capacity - count) > 0, msg: '已满' };
     },
     async getAvailDates(cfg) {
-        const dates = [];
-        const today = new Date();
-        for(let i=0; i<cfg.days; i++) {
-            const d = new Date(today); d.setDate(today.getDate() + i);
-            dates.push(d.toISOString().split('T')[0]);
-        }
+        const dates = []; const today = new Date();
+        for(let i=0; i<cfg.days; i++) { const d = new Date(today); d.setDate(today.getDate()+i); dates.push(d.toISOString().split('T')[0]); }
         return dates;
     },
     getWeekday(s) { return ['日','一','二','三','四','五','六'][new Date(s).getDay()]; }
 };
 
-// ==================== 全局状态与 UI (保持逻辑不变) ====================
+// ==================== 全局状态 ====================
 var currentUser = null; var superPwdCallback = null; var recordsCache = []; 
-const ROLE_NAMES = { superadmin: '超级管理员', admin: '管理员', operator: '预约人员' };
 const PERMS = {
     superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
-    operator: ['booking','dashboard','records']
+    operator: ['booking','dashboard','records'] // 仅取消权限
 };
 function hasPerm(perm) { if (!currentUser) return false; return PERMS[currentUser.role]?.includes(perm) || false; }
 function applyPerms() {
-    document.querySelectorAll('[data-perm]').forEach(el => {
-        el.classList.toggle('perm-hide', !hasPerm(el.dataset.perm));
-    });
-    const badge = document.getElementById('navRoleBadge');
-    badge.textContent = ROLE_NAMES[currentUser.role];
-    badge.className = 'role-badge role-' + currentUser.role;
+    document.querySelectorAll('[data-perm]').forEach(el => el.classList.toggle('perm-hide', !hasPerm(el.dataset.perm)));
+    document.getElementById('navRoleBadge').textContent = {superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[currentUser.role];
     document.getElementById('navUserName').textContent = currentUser.name;
     document.getElementById('operatorTip').style.display = currentUser.role === 'operator' ? 'block' : 'none';
 }
@@ -501,18 +419,13 @@ async function doLogin(e) {
         const users = await VikaDB.getUsers();
         const u = users.find(x => x.username === document.getElementById('loginUser').value.trim());
         if (!u) throw new Error('用户不存在');
-        if (u.role !== 'operator' || u.password) {
-            if (u.password !== document.getElementById('loginPwd').value) throw new Error('密码错误');
-        }
+        if (u.role !== 'operator' || u.password) { if (u.password !== document.getElementById('loginPwd').value) throw new Error('密码错误'); }
         currentUser = u; sessionStorage.setItem('currentUser', JSON.stringify(u));
         document.getElementById('loginPage').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); applyPerms(); initBooking();
     } catch (err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = orgText; }
 }
 function doLogout() { currentUser = null; sessionStorage.removeItem('currentUser'); document.getElementById('appContainer').classList.remove('show'); document.getElementById('loginPage').style.display = 'flex'; }
-function checkSession() {
-    const saved = sessionStorage.getItem('currentUser');
-    if (saved) { currentUser = JSON.parse(saved); document.getElementById('loginPage').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); applyPerms(); initBooking(); }
-}
+function checkSession() { const saved = sessionStorage.getItem('currentUser'); if (saved) { currentUser = JSON.parse(saved); document.getElementById('loginPage').style.display = 'none'; document.getElementById('appContainer').classList.add('show'); applyPerms(); initBooking(); } }
 function showPage(name, el) {
     if (!hasPerm(name) && !['booking','dashboard','records'].includes(name)) { alert('无权访问'); return; }
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -522,7 +435,7 @@ function showPage(name, el) {
     if (name === 'booking') initBooking(); if (name === 'dashboard') loadDashboard(); if (name === 'records') loadRecords(); if (name === 'config') loadCfgTable(); if (name === 'share') initShare(); if (name === 'users') loadUserTable();
 }
 
-// 预约模块
+// ==================== 预约模块 (修复错位问题) ====================
 let bookState = { project: null, date: null, slot: null, mode: null, cfg: null };
 async function initBooking() {
     const sel = document.getElementById('selProject');
@@ -558,6 +471,7 @@ async function renderDates(filterSlot) {
         if (filterSlot) avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, filterSlot);
         else cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
         const full = avail <= 0; const sel = bookState.date === dt;
+        // 🟢 修复：onclick 参数加单引号，防止解析错误
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}"><div class="date-day">${new Date(dt).getDate()}</div><div class="date-wd">周${VikaDB.getWeekday(dt)}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
     });
     document.getElementById('dateGrid').innerHTML = html;
@@ -568,6 +482,7 @@ async function renderSlots(filterDate) {
     cfg.slots.forEach(s => {
         let avail = filterDate ? (cfg.capacity - VikaDB.countBookedLocal(bookState.project, filterDate, s)) : 999;
         const full = avail <= 0; const sel = bookState.slot === s;
+        // 🟢 修复：onclick 参数加单引号
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}"><div>${s}</div><div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div></div>`;
     });
     document.getElementById('timeGrid').innerHTML = html;
@@ -594,7 +509,7 @@ document.getElementById('bookingForm').addEventListener('submit', async function
 });
 function resetBooking() { document.getElementById('bookingForm').reset(); bookState = { project: null, date: null, slot: null, mode: null, cfg: null }; document.getElementById('modeGroup').style.display = 'none'; document.getElementById('dateGroup').style.display = 'none'; document.getElementById('timeGroup').style.display = 'none'; document.getElementById('formCard').style.display = 'block'; document.getElementById('successCard').style.display = 'none'; checkSubmit(); }
 
-// 其他模块逻辑 (仪表盘/记录/配置/用户)
+// ==================== 仪表盘 (修复下拉筛选) ====================
 async function loadDashboard() {
     const date = document.getElementById('dashDate').value || new Date().toISOString().split('T')[0];
     if(!document.getElementById('dashDate').value) document.getElementById('dashDate').value = date;
@@ -603,6 +518,15 @@ async function loadDashboard() {
     const all = await VikaDB.getRecords({ start:date, end:date });
     const dayRecords = all.filter(r => r.date === date && r.status !== 'cancelled');
     const cfgs = await VikaDB.getConfigs();
+    
+    // 🟢 修复：自动填充时段下拉
+    const allSlots = new Set();
+    cfgs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
+    const slotSel = document.getElementById('dashSlot');
+    if(slotSel.options.length <= 1) {
+        Array.from(allSlots).sort().forEach(s => slotSel.innerHTML += `<option value="${s}">${s}</option>`);
+    }
+
     let html = '';
     cfgs.forEach(cfg => {
         let total = 0, booked = 0, slotRows = '';
@@ -617,18 +541,46 @@ async function loadDashboard() {
     div.innerHTML = html;
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
+
+// ==================== 记录管理 (修复电话/下拉/权限/Excel) ====================
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
-    let list = await VikaDB.getRecords({ start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value });
-    if(document.getElementById('recStatus').value) list = list.filter(r => r.status === document.getElementById('recStatus').value);
+    
+    // 🟢 修复：加载配置填充下拉
+    if(document.getElementById('recProject').options.length <= 1) {
+        const cfgs = await VikaDB.getConfigs();
+        document.getElementById('recProject').innerHTML = '<option value="">全部</option>';
+        cfgs.forEach(c => document.getElementById('recProject').innerHTML += `<option value="${c.name}">${c.name}</option>`);
+    }
+
+    let list = await VikaDB.getRecords({ 
+        start: document.getElementById('recStart').value, 
+        end: document.getElementById('recEnd').value, 
+        createStart: document.getElementById('createStart').value,
+        createEnd: document.getElementById('createEnd').value,
+        project: document.getElementById('recProject').value,
+        status: document.getElementById('recStatus').value
+    });
     if (currentUser.role === 'operator') list = list.filter(r => r.createdBy === currentUser.username);
+    
     document.getElementById('recOverview').innerHTML = `<div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>`;
     document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
+    
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
-    let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
+    
+    // 🟢 修复：增加创建人和创建时间列
+    let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
-        html += `<tr data-id="${r.id}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td><td>${r.name}</td><td>${r.phone}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td><span class="status ${sc}">${r.status}</span></td><td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button><button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button><button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button></div></td></tr>`;
+        const stCn = STATUS_MAP[r.status] || r.status;
+        const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
+        // 🟢 修复：权限控制按钮
+        let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+        if(currentUser.role !== 'operator') {
+            btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+        }
+        // 🟢 修复：r.phone || '-' 处理undefined
+        html += `<tr data-id="${r.id}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td><td>${r.name}</td><td>${r.phone||'-'}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.createdBy||'-'}</td><td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td><td><div class="btn-group">${btns}</div></td></tr>`;
     });
     tbl.innerHTML = html + '</tbody></table>';
 }
@@ -637,7 +589,36 @@ async function confirmRec(id) { if(confirm('确认此预约？')) { await VikaDB
 async function cancelRec(id) { if(confirm('取消此预约？')) { await VikaDB.updateRecordStatus(id, 'cancelled', {}); loadRecords(); } }
 function deleteRec(id) { requireSuperPwd(async () => { await VikaDB.deleteRecord(id); loadRecords(); }); }
 function batchDelete() { const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value); if(!ids.length) return alert('请选择'); requireSuperPwd(async () => { await VikaDB.batchDeleteRecords(ids); loadRecords(); }); }
-function exportExcel() { alert('请直接在维格表后台导出 Excel，更方便！'); }
+
+// 🟢 修复：导出Excel功能
+async function exportExcel() {
+    const list = await VikaDB.getRecords({ 
+        start: document.getElementById('recStart').value, 
+        end: document.getElementById('recEnd').value, 
+        createStart: document.getElementById('createStart').value,
+        createEnd: document.getElementById('createEnd').value,
+        project: document.getElementById('recProject').value,
+        status: document.getElementById('recStatus').value
+    });
+    if(!list.length) return alert('当前没有数据可导出');
+    const data = list.map((r,i) => ({ 
+        '序号': i+1, 
+        '姓名': r.name, 
+        '电话': r.phone||'', 
+        '项目': r.project, 
+        '日期': r.date, 
+        '时段': r.slot, 
+        '状态': STATUS_MAP[r.status]||r.status,
+        '创建人': r.createdBy||'',
+        '创建时间': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '预约记录');
+    XLSX.writeFile(wb, '预约数据.xlsx');
+}
+
+// ==================== 模版下载与导入 ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
@@ -652,7 +633,7 @@ async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.delete
 async function loadUserTable() {
     const list = await VikaDB.getUsers();
     let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${ROLE_NAMES[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
+    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${{superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
     document.getElementById('userTable').innerHTML = html + '</tbody></table>';
 }
 async function editUser(id) { const users = await VikaDB.getUsers(); openUserModal(users.find(u => u.id === id)); }
@@ -665,20 +646,14 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 function initShare() { const base = location.href.split('?')[0]; document.getElementById('userLink').value = base; document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`; }
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
 
-// --- Excel 模板与导入 (已实现) ---
+// 🟢 修复：恢复模版下载功能
 function downloadConfigTemplate() {
     const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }];
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '项目模板');
-    XLSX.writeFile(wb, '项目配置导入模板.xlsx');
+    const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '项目模板'); XLSX.writeFile(wb, '项目配置导入模板.xlsx');
 }
 function downloadUserTemplate() {
     const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }];
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '用户模板');
-    XLSX.writeFile(wb, '用户导入模板.xlsx');
+    const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '用户模板'); XLSX.writeFile(wb, '用户导入模板.xlsx');
 }
 function importConfigs(e) {
     const file = e.target.files[0]; if (!file) return;
@@ -696,8 +671,7 @@ function importConfigs(e) {
             alert(`已导入 ${count} 个配置`); loadCfgTable();
         } catch (err) { alert('导入失败：' + err.message); }
     };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
+    reader.readAsArrayBuffer(file); e.target.value = '';
 }
 function importUsers(e) {
     const file = e.target.files[0]; if (!file) return;
@@ -716,12 +690,10 @@ function importUsers(e) {
             alert(`已导入 ${count} 个用户`); loadUserTable();
         } catch (err) { alert('导入失败：' + err.message); }
     };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
+    reader.readAsArrayBuffer(file); e.target.value = '';
 }
 
 document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
