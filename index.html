@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (国际版)</title>
+    <title>画美线上预约系统 (修复版)</title>
     <!-- 引入 Excel 导出库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 引入 LeanCloud SDK -->
     <script src="//code.bdstatic.com/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
     <style>
-        /* ================= 样式部分 (保持原样) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -541,16 +541,8 @@
 
 <script>
 // ==================== LeanCloud 初始化 (国际版) ====================
-// ⚠️ 必填：请填入你在国际版控制台 (TDS) 获取的信息
-
 const APP_ID = "9vvVR2SwvoL7KZRJTfGI8FWu-MdYXbMMI";
 const APP_KEY = "I2IjTub3wD7zhF8bVe3q1V8N";
-
-// ⚠️ 必填：API域名
-// 国际版控制台 > 设置 > 域名 (App Services) 下面找 "REST API" 
-// 通常长这样： "https://你的8位ID.api.lncldglobal.com"
-// ❌ 不要填原来的 dpdns 或 qzz 域名
-// ✅ 必须带 https://，且最后不要带 /
 const SERVER_URL = "https://9vvvr2sw.api.lncldglobal.com"; 
 
 AV.init({
@@ -582,8 +574,8 @@ function getPhoneStatus(phone) {
     return { valid: false, msg: '❌ 格式错误', class: 'error' };
 }
 
-// ==================== 数据库层 ====================
-const DB = {
+// ==================== 数据库层 (Renamed to SystemDB to avoid conflicts) ====================
+const SystemDB = {
     async getUsers() {
         try {
             const query = new AV.Query('AppUser');
@@ -772,7 +764,7 @@ async function doLogin(e) {
     const pwd = document.getElementById('loginPwd').value;
     
     try {
-        const users = await DB.getUsers();
+        const users = await SystemDB.getUsers();
         const user = users.find(u => u.username === username);
         
         if (!user) { alert('用户不存在！'); return; }
@@ -822,7 +814,7 @@ function requireSuperPwd(callback) {
 async function verifySuperPwd(e) {
     e.preventDefault();
     const pwd = document.getElementById('superPwdInput').value;
-    const users = await DB.getUsers();
+    const users = await SystemDB.getUsers();
     const superUsers = users.filter(u => u.role === 'superadmin');
     const valid = superUsers.some(u => u.password === pwd);
     
@@ -855,7 +847,7 @@ async function initBooking() {
     const sel = document.getElementById('selProject');
     if (sel.options.length <= 1) {
         sel.innerHTML = '<option>加载项目中...</option>';
-        const configs = await DB.getConfigs();
+        const configs = await SystemDB.getConfigs();
         sel.innerHTML = '<option value="">请选择预约项目</option>';
         configs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
     }
@@ -869,10 +861,10 @@ document.getElementById('selProject').addEventListener('change', async function(
     document.getElementById('timeGroup').style.display = 'none';
     const val = this.value;
     if (val) {
-        const cfgs = await DB.getConfigs();
+        const cfgs = await SystemDB.getConfigs();
         bookState.cfg = cfgs.find(c => c.name === val);
         bookState.project = val;
-        await DB.fetchActiveRecords(val);
+        await SystemDB.fetchActiveRecords(val);
         document.getElementById('modeGroup').style.display = 'block';
     }
     checkSubmit();
@@ -899,15 +891,15 @@ function pickMode(mode) {
 
 async function renderDates(filterSlot) {
     const cfg = bookState.cfg;
-    const dates = await DB.getAvailDates(cfg);
+    const dates = await SystemDB.getAvailDates(cfg);
     let html = '';
     dates.forEach(dt => {
         const day = new Date(dt).getDate();
-        const wd = DB.getWeekday(dt);
-        const isToday = dt === DB.fmtDate(new Date());
+        const wd = SystemDB.getWeekday(dt);
+        const isToday = dt === SystemDB.fmtDate(new Date());
         let avail = 0;
-        if (filterSlot) { avail = cfg.capacity - DB.countBookedLocal(bookState.project, dt, filterSlot); }
-        else { cfg.slots.forEach(s => { avail += cfg.capacity - DB.countBookedLocal(bookState.project, dt, s); }); }
+        if (filterSlot) { avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, filterSlot); }
+        else { cfg.slots.forEach(s => { avail += cfg.capacity - SystemDB.countBookedLocal(bookState.project, dt, s); }); }
         const full = avail <= 0;
         const sel = bookState.date === dt;
         html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}">
@@ -924,7 +916,7 @@ async function renderSlots(filterDate) {
     let html = '';
     cfg.slots.forEach(s => {
         let avail = 0;
-        if (filterDate) { avail = cfg.capacity - DB.countBookedLocal(bookState.project, filterDate, s); }
+        if (filterDate) { avail = cfg.capacity - SystemDB.countBookedLocal(bookState.project, filterDate, s); }
         else { avail = 999; }
         if(!filterDate) { html += `<div class="sel-item" onclick="pickSlot(\''+s+'\')"><div>${s}</div></div>`; return; }
         const full = avail <= 0;
@@ -972,7 +964,7 @@ document.getElementById('bookingForm').addEventListener('submit', async function
     const btn = document.getElementById('btnSubmit');
     btn.disabled = true; btn.textContent = '提交中...';
     try {
-        const chk = await DB.canBookAsync(bookState.project, bookState.date, bookState.slot);
+        const chk = await SystemDB.canBookAsync(bookState.project, bookState.date, bookState.slot);
         if (!chk.ok) { alert('预约失败：' + chk.msg); return; }
         const rec = {
             name: document.getElementById('inpName').value.trim(),
@@ -984,11 +976,11 @@ document.getElementById('bookingForm').addEventListener('submit', async function
             remark: document.getElementById('inpRemark').value.trim(),
             status: 'confirmed'
         };
-        const saved = await DB.addRecord(rec);
+        const saved = await SystemDB.addRecord(rec);
         document.getElementById('cfmName').textContent = saved.name;
         document.getElementById('cfmPhone').textContent = saved.phone;
         document.getElementById('cfmProject').textContent = saved.project;
-        document.getElementById('cfmDate').textContent = saved.date + ' 周' + DB.getWeekday(saved.date);
+        document.getElementById('cfmDate').textContent = saved.date + ' 周' + SystemDB.getWeekday(saved.date);
         document.getElementById('cfmTime').textContent = saved.slot;
         document.getElementById('formCard').style.display = 'none';
         document.getElementById('successCard').style.display = 'block';
@@ -1007,8 +999,8 @@ function resetBooking() {
 }
 
 async function initDashboard() {
-    document.getElementById('dashDate').value = DB.fmtDate(new Date());
-    const cfgs = await DB.getConfigs();
+    document.getElementById('dashDate').value = SystemDB.fmtDate(new Date());
+    const cfgs = await SystemDB.getConfigs();
     const allSlots = new Set();
     cfgs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
     const sel = document.getElementById('dashSlot');
@@ -1027,7 +1019,7 @@ async function loadDashboard() {
     query.notEqualTo('status', 'cancelled');
     const dayRecords = await query.find();
     const count = (p, s) => dayRecords.filter(r => r.get('project')===p && r.get('slot')===s).length;
-    const cfgs = await DB.getConfigs();
+    const cfgs = await SystemDB.getConfigs();
     let html = '';
     cfgs.forEach(cfg => {
         const slotsChk = slot ? (cfg.slots.includes(slot) ? [slot] : []) : cfg.slots;
@@ -1064,9 +1056,9 @@ document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 function initRecords() {
     const today = new Date();
     const ago = new Date(today); ago.setDate(ago.getDate() - 30);
-    document.getElementById('recStart').value = DB.fmtDate(ago);
-    document.getElementById('recEnd').value = DB.fmtDate(today);
-    DB.getConfigs().then(cfgs => {
+    document.getElementById('recStart').value = SystemDB.fmtDate(ago);
+    document.getElementById('recEnd').value = SystemDB.fmtDate(today);
+    SystemDB.getConfigs().then(cfgs => {
         const sel = document.getElementById('recProject');
         sel.innerHTML = '<option value="">全部</option>';
         cfgs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
@@ -1078,7 +1070,7 @@ async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
     const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
-    let list = await DB.getRecords(filter);
+    let list = await SystemDB.getRecords(filter);
     if (currentUser.role === 'operator') { list = list.filter(r => r.createdBy === currentUser.username); }
     const confirmed = list.filter(r => r.status === 'confirmed').length;
     const success = list.filter(r => r.status === 'success').length;
@@ -1110,18 +1102,18 @@ async function loadRecords() {
     tbl.innerHTML = html;
 }
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
-async function confirmRec(id) { if (!confirm('确认此预约？')) return; await DB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name }); loadRecords(); }
-async function cancelRec(id) { if (!confirm('取消此预约？')) return; await DB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() }); loadRecords(); }
-function deleteRec(id) { requireSuperPwd(async () => { await DB.deleteRecord(id); loadRecords(); }); }
+async function confirmRec(id) { if (!confirm('确认此预约？')) return; await SystemDB.updateRecordStatus(id, 'success', { confirmedAt: new Date(), confirmedBy: currentUser.name }); loadRecords(); }
+async function cancelRec(id) { if (!confirm('取消此预约？')) return; await SystemDB.updateRecordStatus(id, 'cancelled', { cancelledAt: new Date() }); loadRecords(); }
+function deleteRec(id) { requireSuperPwd(async () => { await SystemDB.deleteRecord(id); loadRecords(); }); }
 function batchDelete() {
     const selected = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value);
     if (selected.length === 0) { alert('请先选择要删除的记录！'); return; }
-    requireSuperPwd(async () => { if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) { await DB.batchDeleteRecords(selected); loadRecords(); } });
+    requireSuperPwd(async () => { if (confirm(`确定删除选中的 ${selected.length} 条记录？`)) { await SystemDB.batchDeleteRecords(selected); loadRecords(); } });
 }
 async function exportExcel() {
     requireSuperPwd(async () => {
         const filter = { start: document.getElementById('recStart').value, end: document.getElementById('recEnd').value, project: document.getElementById('recProject').value, status: document.getElementById('recStatus').value };
-        const list = await DB.getRecords(filter);
+        const list = await SystemDB.getRecords(filter);
         if (list.length === 0) { alert('没有数据！'); return; }
         const data = list.map((r,i) => ({ '序号': i+1, '顾客姓名': r.name, '联系电话': r.phone, '预约项目': r.project, '预约日期': r.date, '预约时段': r.slot, '预约人': r.operator||'', '备注': r.remark||'', '状态': r.status, '创建时间': new Date(r.createdAt).toLocaleString() }));
         const ws = XLSX.utils.json_to_sheet(data);
@@ -1132,7 +1124,7 @@ async function exportExcel() {
 }
 
 async function loadCfgTable() {
-    const list = await DB.getConfigs();
+    const list = await SystemDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>可约天数</th><th>时段容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(c => {
         const tags = c.slots.map(s => `<span class="tag">${s}</span>`).join('');
@@ -1141,7 +1133,7 @@ async function loadCfgTable() {
     html += '</tbody></table>';
     document.getElementById('cfgTable').innerHTML = html;
 }
-async function editCfg(id) { const cfgs = await DB.getConfigs(); const cfg = cfgs.find(c => c.id === id); if (cfg) openCfgModal(cfg); }
+async function editCfg(id) { const cfgs = await SystemDB.getConfigs(); const cfg = cfgs.find(c => c.id === id); if (cfg) openCfgModal(cfg); }
 function openCfgModal(cfg) {
     document.getElementById('cfgModalTitle').textContent = cfg ? '编辑项目' : '添加项目';
     document.getElementById('cfgId').value = cfg ? cfg.id : '';
@@ -1167,19 +1159,19 @@ async function saveCfg(e) {
     document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { const inputs = row.querySelectorAll('input'); if (inputs[0].value && inputs[1].value) slots.push(inputs[0].value + '-' + inputs[1].value); });
     if (slots.length === 0) { alert('请添加时段'); return; }
     slots.sort();
-    await DB.saveConfig({ id, name, days, capacity, slots });
+    await SystemDB.saveConfig({ id, name, days, capacity, slots });
     hideModal('cfgModal');
     loadCfgTable();
 }
-async function delCfg(id) { if (!confirm('确定删除？')) return; await DB.deleteConfig(id); loadCfgTable(); }
+async function delCfg(id) { if (!confirm('确定删除？')) return; await SystemDB.deleteConfig(id); loadCfgTable(); }
 async function exportAllData() {
-    const configs = await DB.getConfigs();
-    const users = await DB.getUsers();
-    const records = await DB.getRecords({});
+    const configs = await SystemDB.getConfigs();
+    const users = await SystemDB.getUsers();
+    const records = await SystemDB.getRecords({});
     const data = { configs, users, records, exportTime: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `备份_${DB.fmtDate(new Date())}.json`; a.click();
+    a.download = `备份_${SystemDB.fmtDate(new Date())}.json`; a.click();
 }
 
 function initShare() {
@@ -1190,7 +1182,7 @@ function initShare() {
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制！'); }
 
 async function loadUserTable() {
-    const list = await DB.getUsers();
+    const list = await SystemDB.getUsers();
     const roleMap = { superadmin: ['ur-super','超级管理员'], admin: ['ur-admin','管理员'], operator: ['ur-op','预约人员'] };
     let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>密码状态</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(u => {
@@ -1201,7 +1193,7 @@ async function loadUserTable() {
     html += '</tbody></table>';
     document.getElementById('userTable').innerHTML = html;
 }
-async function editUser(id) { const users = await DB.getUsers(); const user = users.find(u => u.id === id); if (user) openUserModal(user); }
+async function editUser(id) { const users = await SystemDB.getUsers(); const user = users.find(u => u.id === id); if (user) openUserModal(user); }
 function openUserModal(user) {
     document.getElementById('userModalTitle').textContent = user ? '编辑用户' : '添加用户';
     document.getElementById('userId').value = user ? user.id : '';
@@ -1218,11 +1210,11 @@ async function saveUser(e) {
     const name = document.getElementById('userName').value.trim();
     const pwd = document.getElementById('userPwd').value;
     const role = document.getElementById('userRole').value;
-    await DB.saveUser({ id, username, name, password: pwd, role });
+    await SystemDB.saveUser({ id, username, name, password: pwd, role });
     hideModal('userModal');
     loadUserTable();
 }
-async function delUser(id) { if (!confirm('确定删除此用户？')) return; await DB.deleteUser(id); loadUserTable(); }
+async function delUser(id) { if (!confirm('确定删除此用户？')) return; await SystemDB.deleteUser(id); loadUserTable(); }
 function downloadUserTemplate() {
     const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }];
     const ws = XLSX.utils.json_to_sheet(data);
@@ -1240,7 +1232,7 @@ function importUsers(e) {
             let count = 0;
             for (let row of data) {
                 const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' };
-                await DB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']||''), role: roleMap[row['角色']] || 'operator' });
+                await SystemDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']||''), role: roleMap[row['角色']] || 'operator' });
                 count++;
             }
             alert(`已导入 ${count} 个用户`); loadUserTable();
@@ -1251,7 +1243,7 @@ function importUsers(e) {
 }
 
 document.addEventListener('DOMContentLoaded', checkSession);
-console.log("脚本加载完成");
+console.log("SystemDB loaded");
 </script>
 </body>
 </html>
