@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v9.0 操作自由版)</title>
+    <title>画美线上预约系统 (v10.0 UI修复版)</title>
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 2. 引入 LeanCloud SDK -->
@@ -76,8 +76,10 @@
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
-        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        /* 🟢 修复：调整按钮间距和内边距，防止太挤 🟢 */
+        .btn-sm { padding: 6px 10px; font-size: 0.8rem; white-space: nowrap; }
+        .btn-group { display: flex; gap: 6px; align-items: center; }
+        
         .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
         .filter-item { flex: 1; min-width: 140px; }
         .filter-item label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text2); font-size: 0.8rem; }
@@ -103,6 +105,10 @@
         .data-tbl th, .data-tbl td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
+        
+        /* 🟢 修复：强制“操作”列不换行 🟢 */
+        .data-tbl td:last-child { white-space: nowrap; width: 1%; }
+        
         .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
         .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
         .slot-tbl th { background: var(--bg); }
@@ -387,6 +393,7 @@
                 </div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
+                    <!-- 新增功能按钮 -->
                     <button class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
                     <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
                     <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
@@ -1109,7 +1116,6 @@ function initRecords() {
     });
 }
 
-// 🟢 修复：加载记录时应用双维度筛选 🟢
 async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
@@ -1152,14 +1158,12 @@ async function loadRecords() {
         const [sc, st] = statMap[r.status] || ['',''];
         const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
         
-        // 🟢 修复：按钮逻辑 - 全状态允许操作 🟢
+        // 🟢 修复：按钮组不换行 🟢
         let actionBtns = '';
         if (canConfirm && r.status !== 'success') {
-            // 如果不是成功状态，就可以点击“确认”（包括待确认和已取消的）
             actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>`;
         }
         if (canCancel && r.status !== 'cancelled') {
-            // 如果不是已取消状态，就可以点击“取消”（包括待确认和已成功的）
             actionBtns += `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         }
         if (canDel) actionBtns += `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
