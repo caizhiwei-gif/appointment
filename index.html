@@ -3,27 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v18.0 极速修复版)</title>
+    <title>画美线上预约系统 (v19.0 终极修复版)</title>
     
-    <!-- 1. 引入 Excel 库 (饿了么源 - 极速) -->
-    <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 1. 引入 Excel 库 (主源：jsd.cdn.zzko.cn) -->
+    <script src="https://jsd.cdn.zzko.cn/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
-    <!-- 2. 引入 Bmob SDK (饿了么源 - 极速 - 核心修复) -->
-    <script src="https://npm.elemecdn.com/hydrogen-js-sdk@2.5.1/dist/Bmob-2.5.1.min.js"></script>
+    <!-- 2. 引入 Bmob SDK (主源：jsd.cdn.zzko.cn) -->
+    <script src="https://jsd.cdn.zzko.cn/npm/hydrogen-js-sdk@2.5.1/dist/Bmob-2.5.1.min.js"></script>
 
-    <!-- 3. 错误监控 -->
+    <!-- 3. 备用加载方案 & 调试诊断 -->
     <script>
-        window.addEventListener('load', function() {
-            if (typeof Bmob === 'undefined') {
-                alert("🔴 严重错误：SDK 加载失败！\n请尝试刷新页面，或更换网络环境。");
+        // 定义一个加载检查函数
+        function checkLibs() {
+            var missing = [];
+            if (typeof XLSX === 'undefined') missing.push("Excel库");
+            if (typeof Bmob === 'undefined') missing.push("Bmob SDK");
+            
+            if (missing.length > 0) {
+                // 如果主源失败，尝试紧急备用源 (UNPKG)
+                console.warn('主源加载失败，正在尝试加载备用源...');
+                
+                if (typeof Bmob === 'undefined') {
+                    var script = document.createElement('script');
+                    script.src = 'https://unpkg.com/hydrogen-js-sdk@2.5.1/dist/Bmob-2.5.1.min.js';
+                    document.head.appendChild(script);
+                }
+                if (typeof XLSX === 'undefined') {
+                    var script2 = document.createElement('script');
+                    script2.src = 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    document.head.appendChild(script2);
+                }
+
+                // 延迟提示用户
+                setTimeout(function(){
+                    if (typeof Bmob === 'undefined') {
+                        alert("🔴 严重错误：系统核心组件加载失败！\n\n缺少组件：" + missing.join(", ") + "\n\n请尝试以下操作：\n1. 切换手机热点或4G网络\n2. 强制刷新页面 (Ctrl+F5)");
+                    }
+                }, 3000);
             } else {
-                console.log("✅ Bmob SDK 加载成功");
+                console.log("✅ 所有组件加载成功 (v19.0)");
             }
-        });
+        }
+        
+        // 页面加载完成后立即检查
+        window.addEventListener('load', checkLibs);
     </script>
 
     <style>
-        /* ================= 样式部分 (保持原样) ================= */
+        /* ================= 样式部分 (保持 v12.0 完美版) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -90,8 +117,11 @@
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
+        
+        /* 按钮组样式 */
         .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
         .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+        
         .filter-bar { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; box-shadow: var(--shadow); }
         .filter-item { flex: 1; min-width: 140px; }
         .filter-item label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text2); font-size: 0.8rem; }
@@ -277,7 +307,6 @@
                         <div class="sel-grid" id="timeGrid"></div>
                     </div>
                     <div class="form-group">
-                        <!-- 🟢 预约人必填 🟢 -->
                         <label>预约人 <span class="required">*</span></label>
                         <input type="text" class="form-control" id="inpOperator" placeholder="请输入预约操作人" required>
                     </div>
@@ -330,7 +359,7 @@
         </div>
     </div>
 
-    <!-- 页面3：预约记录 (v13.0 双维度筛选) -->
+    <!-- 页面3：预约记录 -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">
@@ -339,7 +368,6 @@
             
             <div class="overview-row" id="recOverview"></div>
             <div class="filter-bar">
-                <!-- 🟢 第一组：预约日期筛选 🟢 -->
                 <div class="filter-item">
                     <label>预约日期 (起)</label>
                     <input type="date" class="form-control" id="recStart">
@@ -348,8 +376,6 @@
                     <label>预约日期 (止)</label>
                     <input type="date" class="form-control" id="recEnd">
                 </div>
-                
-                <!-- 🟢 第二组：提交日期筛选 🟢 -->
                 <div class="filter-item">
                     <label>提交日期 (起)</label>
                     <input type="date" class="form-control" id="recCreateStart">
@@ -358,7 +384,6 @@
                     <label>提交日期 (止)</label>
                     <input type="date" class="form-control" id="recCreateEnd">
                 </div>
-
                 <div class="filter-item">
                     <label>项目</label>
                     <select class="form-control" id="recProject"><option value="">全部</option></select>
@@ -402,7 +427,6 @@
                 </div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
-                    <!-- 新增功能按钮 -->
                     <button class="btn btn-purple" onclick="downloadConfigTemplate()">📥 下载项目模板</button>
                     <button class="btn btn-primary" onclick="document.getElementById('fileConfigImport').click()">📤 导入项目配置</button>
                     <input type="file" id="fileConfigImport" accept=".xlsx,.xls" style="display:none" onchange="importConfigs(event)">
@@ -572,24 +596,26 @@
 </div>
 
 <script>
-// ==================== Bmob 初始化 (关键修改) ====================
-// 🟢 内置你的 Bmob 密钥
+// ==================== Bmob 初始化 ====================
+// 🟢 Bmob 密钥
 const BMOB_SECRET_KEY = "9a2fea15d3f97c02";
 const BMOB_API_KEY    = "3503211983061781"; 
 
-// 🟢 添加保护：防止 SDK 加载失败导致报错
-if (typeof Bmob === 'undefined') {
-    alert("严重错误：Bmob SDK 加载失败！请检查网络连接。");
-} else {
+// 🟢 安全初始化逻辑
+if (typeof Bmob !== 'undefined') {
     try {
         Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+        console.log("Bmob 初始化成功");
     } catch (e) {
-        alert("Bmob 初始化失败：" + e.message);
+        console.error("Bmob 初始化错误:", e);
     }
+} else {
+    // 这里不再弹窗，交给头部的 window.load 统一处理
+    console.error("Bmob 对象未定义，等待重试机制...");
 }
 
 // ==================== 全局状态 ====================
-var currentUser = null; // 🟢 改回 var 增加兼容性
+var currentUser = null; 
 var superPwdCallback = null;
 var recordsCache = []; 
 
@@ -608,7 +634,7 @@ function getPhoneStatus(phone) {
 }
 
 // ==================== 数据库层 (SystemDB - Bmob 版) ====================
-var SystemDB = { // 🟢 改回 var
+var SystemDB = { 
     async getUsers() {
         const query = Bmob.Query("AppUser");
         try {
@@ -645,8 +671,6 @@ var SystemDB = { // 🟢 改回 var
         if(filter.start) q.equalTo("date", ">=", filter.start);
         if(filter.end) q.equalTo("date", "<=", filter.end);
         if(filter.project) q.equalTo("project", "==", filter.project);
-        // Bmob 筛选日期较复杂，此处简化为文本匹配或范围查询
-        // 实际项目中建议使用时间戳查询
         q.order("-createdAt");
         return await q.find();
     },
@@ -660,8 +684,7 @@ var SystemDB = { // 🟢 改回 var
     
     async updateRecordStatus(id, status, extra) {
         const q = Bmob.Query("AppRecord");
-        // Bmob update syntax:
-        const item = q.get(id); // Just a pointer in v3
+        const item = q.get(id); 
         item.set("status", status);
         for(let k in extra) item.set(k, extra[k]);
         await item.save();
@@ -673,7 +696,6 @@ var SystemDB = { // 🟢 改回 var
     },
     
     async batchDeleteRecords(ids) {
-        // Bmob v3 批量删除需要循环或使用特定 API，这里为了稳妥用循环
         for(let id of ids) {
             const q = Bmob.Query("AppRecord");
             await q.destroy(id);
@@ -712,6 +734,17 @@ var SystemDB = { // 🟢 改回 var
         const cfg = cfgs.find(c => c.name === name);
         if(!cfg) return {ok:false};
         return { ok: (cfg.capacity - count) > 0 };
+    },
+    async getAvailDates(cfg) {
+        // 修正：增加获取可用日期的方法
+        const dates = [];
+        const today = new Date();
+        for(let i=0; i<cfg.days; i++) {
+            const d = new Date(today);
+            d.setDate(today.getDate() + i);
+            dates.push(this.fmtDate(d));
+        }
+        return dates;
     },
     
     fmtDate(d) { return d.toISOString().split('T')[0]; },
@@ -835,9 +868,13 @@ async function initBooking() {
     const sel = document.getElementById('selProject');
     if (sel.options.length <= 1) {
         sel.innerHTML = '<option>加载项目中...</option>';
-        const configs = await SystemDB.getConfigs();
-        sel.innerHTML = '<option value="">请选择预约项目</option>';
-        configs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
+        try {
+            const configs = await SystemDB.getConfigs();
+            sel.innerHTML = '<option value="">请选择预约项目</option>';
+            configs.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; });
+        } catch(e) {
+            sel.innerHTML = '<option>加载失败</option>';
+        }
     }
     resetBooking();
 }
@@ -1057,7 +1094,6 @@ function initRecords() {
     });
 }
 
-// 🟢 修复：强制所有按钮显示 + UI排版修复 🟢
 async function loadRecords() {
     const tbl = document.getElementById('recTable');
     tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 数据加载中...</div>';
@@ -1101,7 +1137,6 @@ async function loadRecords() {
         const createTimeStr = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
         
         let actionBtns = '';
-        // 🟢 强制显示所有按钮，不再根据状态隐藏 🟢
         if (canConfirm) {
             actionBtns += `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.objectId}')">确认</button>`;
         }
@@ -1372,10 +1407,6 @@ function importConfigs(e) {
 }
 
 document.addEventListener('DOMContentLoaded', checkSession);
-console.log("SystemDB loaded");
 </script>
 </body>
 </html>
-
-
-
