@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v15.0 修复版)</title>
-    <!-- 1. 引入 Excel 库 -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <title>画美线上预约系统 (v16.0 国内极速版)</title>
     
-    <!-- 2. 引入 Bmob SDK (Bmob官方推荐) -->
-    <script src="https://unpkg.com/bmob.js-sdk-v3.19.0/dist/Bmob-3.19.0.min.js"></script>
+    <!-- 🟢 关键修改 1：使用国内源加载 Excel 库 -->
+    <script src="https://npm.elemecdn.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- 🟢 关键修改 2：使用国内源加载 Bmob SDK (解决加载失败问题) -->
+    <script src="https://npm.elemecdn.com/bmob.js-sdk-v3.19.0/dist/Bmob-3.19.0.min.js"></script>
     
     <style>
-        /* ================= 样式部分 (保持不变) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -79,7 +80,7 @@
         .btn-secondary { background: var(--bg); color: var(--text); }
         .btn-full { width: 100%; }
         
-        /* 修复按钮组样式 */
+        /* 按钮组样式 */
         .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
         .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
         
@@ -108,6 +109,7 @@
         .data-tbl th, .data-tbl td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
         .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
+        /* 操作列不换行 */
         .data-tbl td:last-child { white-space: nowrap; min-width: 220px; width: 1%; }
         .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
         .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
@@ -321,7 +323,7 @@
         </div>
     </div>
 
-    <!-- 页面3：预约记录 (v13.0 双维度筛选) -->
+    <!-- 页面3：预约记录 -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">
