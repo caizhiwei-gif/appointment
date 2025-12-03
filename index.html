@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v21.0 稳定版)</title>
+    <title>画美线上预约系统 (v22.0 经典逻辑版)</title>
     
-    <!-- 1. 引入 Excel 库 (使用 SheetJS 官方源，确保稳定性) -->
+    <!-- 1. 引入 Excel 库 (SheetJS 官方源) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* ================= 样式部分 ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -55,16 +55,21 @@
         .form-hint.error { color: var(--danger); }
         .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
+        
+        /* 复用原有样式名，适配你的HTML结构 */
         .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
+        .sel-grid-2 { grid-template-columns: repeat(2, 1fr); } /* 两个选项并排 */
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
         .sel-item.selected { border-color: var(--primary); background: var(--primary); color: white; }
         .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
+        
         .date-day { font-size: 1.1rem; font-weight: bold; }
         .date-wd { font-size: 0.7rem; color: var(--text2); margin-top: 3px; }
         .sel-item.selected .date-wd { color: rgba(255,255,255,0.8); }
         .slot-left { font-size: 0.7rem; color: var(--success); margin-top: 3px; }
         .sel-item.selected .slot-left { color: rgba(255,255,255,0.8); }
+        
         .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-primary { background: linear-gradient(135deg, var(--primary), #667eea); color: white; }
         .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74,144,217,0.4); }
@@ -176,7 +181,7 @@
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
     <div class="login-box">
-        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内稳定版 v21.0</p></div>
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内双向选择版</p></div>
         <form onsubmit="doLogin(event)">
             <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
             <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
@@ -200,21 +205,36 @@
         <div class="user-info"><span>👤 <span id="navUserName"></span></span><button class="btn-logout" onclick="doLogout()">退出</button></div>
     </nav>
 
-    <!-- 1. 预约挂号 (修复：移除错位问题，强制流程) -->
+    <!-- 1. 预约挂号 (双向选择逻辑回归) -->
     <div id="page-booking" class="page active">
         <div class="container">
             <div class="card" id="formCard">
-                <div class="card-header"><h2>📋 在线预约</h2><p>请按顺序选择：项目 > 日期 > 时段</p></div>
+                <div class="card-header"><h2>📋 在线预约</h2><p>请填写信息完成预约</p></div>
                 <form id="bookingForm">
                     <div class="form-group"><label>顾客姓名 <span class="required">*</span></label><input type="text" class="form-control" id="inpName" required></div>
                     <div class="form-group"><label>联系电话 <span class="required">*</span></label><input type="tel" class="form-control" id="inpPhone" maxlength="11" required><div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div></div>
                     <div class="form-group"><label>预约项目 <span class="required">*</span></label><select class="form-control" id="selProject" required><option value="">加载中...</option></select></div>
                     
-                    <!-- 强制日期显示 -->
-                    <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
+                    <!-- 模式选择 -->
+                    <div class="form-group" id="modeGroup" style="display:none;">
+                        <label>选择方式</label>
+                        <div class="sel-grid sel-grid-2">
+                            <div class="sel-item" onclick="pickMode('date')">📅 先选日期</div>
+                            <div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div>
+                        </div>
+                    </div>
+
+                    <!-- 日期选择 -->
+                    <div class="form-group" id="dateGroup" style="display:none;">
+                        <label>预约日期 <span class="required">*</span></label>
+                        <div class="sel-grid" id="dateGrid"></div>
+                    </div>
                     
-                    <!-- 强制时段显示 -->
-                    <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
+                    <!-- 时段选择 -->
+                    <div class="form-group" id="timeGroup" style="display:none;">
+                        <label>预约时段 <span class="required">*</span></label>
+                        <div class="sel-grid" id="timeGrid"></div>
+                    </div>
                     
                     <div class="form-group"><label>预约人 <span class="required">*</span></label><input type="text" class="form-control" id="inpOperator" required></div>
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
@@ -232,7 +252,7 @@
         </div>
     </div>
 
-    <!-- 2. 预约看板 (修复：下拉筛选自动填充) -->
+    <!-- 2. 预约看板 -->
     <div id="page-dashboard" class="page">
         <div class="container-wide">
             <div class="filter-bar">
@@ -244,7 +264,7 @@
         </div>
     </div>
 
-    <!-- 3. 预约记录 (修复：创建列/下拉/权限/导出) -->
+    <!-- 3. 预约记录 -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
@@ -264,7 +284,7 @@
         </div>
     </div>
 
-    <!-- 4. 系统配置 (修复：模版下载) -->
+    <!-- 4. 系统配置 -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -280,7 +300,7 @@
         </div>
     </div>
     
-    <!-- 5. 用户管理 (修复：模版下载) -->
+    <!-- 5. 用户管理 -->
     <div id="page-users" class="page">
         <div class="container-wide">
             <div class="card">
@@ -360,7 +380,6 @@ const VikaDB = {
         if(filter.status) list = list.filter(r => r.status === filter.status);
         if(filter.start) list = list.filter(r => r.date >= filter.start);
         if(filter.end) list = list.filter(r => r.date <= filter.end);
-        // 创建日期筛选
         if(filter.createStart) { const d = new Date(filter.createStart).setHours(0,0,0,0); list = list.filter(r => r.createdAt >= d); }
         if(filter.createEnd) { const d = new Date(filter.createEnd).setHours(23,59,59,999); list = list.filter(r => r.createdAt <= d); }
         return list.sort((a,b) => b.createdAt - a.createdAt);
@@ -397,7 +416,7 @@ var currentUser = null; var superPwdCallback = null; var recordsCache = [];
 const PERMS = {
     superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
-    operator: ['booking','dashboard','records'] // 仅取消权限
+    operator: ['booking','dashboard','records'] 
 };
 function hasPerm(perm) { if (!currentUser) return false; return PERMS[currentUser.role]?.includes(perm) || false; }
 function applyPerms() {
@@ -435,8 +454,9 @@ function showPage(name, el) {
     if (name === 'booking') initBooking(); if (name === 'dashboard') loadDashboard(); if (name === 'records') loadRecords(); if (name === 'config') loadCfgTable(); if (name === 'share') initShare(); if (name === 'users') loadUserTable();
 }
 
-// ==================== 预约模块 (修复：强制顺序逻辑) ====================
-let bookState = { project: null, date: null, slot: null, cfg: null };
+// ==================== 🟢 预约模块 (双向选择逻辑回归) 🟢 ====================
+let bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+
 async function initBooking() {
     const sel = document.getElementById('selProject');
     if (sel.options.length <= 1) {
@@ -445,78 +465,206 @@ async function initBooking() {
     }
     resetBooking();
 }
+
+// 选择项目后显示模式选择
 document.getElementById('selProject').addEventListener('change', async function() {
-    bookState = { project: null, date: null, slot: null, cfg: null };
-    document.getElementById('dateGroup').style.display = 'none'; 
+    bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
     document.getElementById('timeGroup').style.display = 'none';
+    
     if (this.value) {
         const cfgs = await VikaDB.getConfigs();
-        bookState.cfg = cfgs.find(c => c.name === this.value); 
+        bookState.cfg = cfgs.find(c => c.name === this.value);
         bookState.project = this.value;
         await VikaDB.fetchActiveRecords(this.value);
-        document.getElementById('dateGroup').style.display = 'block';
-        renderDates();
+        document.getElementById('modeGroup').style.display = 'block';
     }
     checkSubmit();
 });
 
-async function renderDates() {
-    const cfg = bookState.cfg; const dates = await VikaDB.getAvailDates(cfg);
+// 模式切换
+function pickMode(mode) {
+    bookState.mode = mode;
+    bookState.date = null;
+    bookState.slot = null;
+    
+    // UI 高亮切换
+    const items = document.querySelectorAll('#modeGroup .sel-item');
+    items.forEach((item, idx) => {
+        item.classList.toggle('selected', (mode === 'date' && idx === 0) || (mode === 'time' && idx === 1));
+    });
+
+    if (mode === 'date') {
+        // 先选日期模式：显示日期，隐藏时段
+        document.getElementById('dateGroup').style.display = 'block';
+        document.getElementById('timeGroup').style.display = 'none';
+        renderDates(null); // 渲染所有日期
+    } else {
+        // 先选时段模式：显示时段，隐藏日期
+        document.getElementById('timeGroup').style.display = 'block';
+        document.getElementById('dateGroup').style.display = 'none';
+        renderSlots(null); // 渲染所有时段
+    }
+    checkSubmit();
+}
+
+// 渲染日期 (如果传了 filterSlot，则只计算该时段的余量)
+async function renderDates(filterSlot) {
+    const cfg = bookState.cfg;
+    const dates = await VikaDB.getAvailDates(cfg);
     let html = '';
+    
     dates.forEach(dt => {
         let avail = 0;
-        cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
-        const full = avail <= 0; const sel = bookState.date === dt;
-        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}"><div class="date-day">${new Date(dt).getDate()}</div><div class="date-wd">周${VikaDB.getWeekday(dt)}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
+        if (filterSlot) {
+            // "先选时段"模式下，计算具体某时段的余量
+            avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, filterSlot);
+        } else {
+            // "先选日期"模式下，计算全天总余量
+            cfg.slots.forEach(s => avail += cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, s));
+        }
+        
+        const full = avail <= 0;
+        const sel = bookState.date === dt;
+        
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickDate(\''+dt+'\')'}">
+            <div class="date-day">${new Date(dt).getDate()}</div>
+            <div class="date-wd">周${VikaDB.getWeekday(dt)}</div>
+            <div class="slot-left">${full?'已满':'余'+avail}</div>
+        </div>`;
     });
     document.getElementById('dateGrid').innerHTML = html;
 }
 
-function pickDate(dt) {
-    bookState.date = dt; 
-    bookState.slot = null;
-    document.getElementById('timeGroup').style.display = 'block'; 
-    renderDates(); // 刷新高亮
-    renderSlots(); 
-    checkSubmit();
-}
-
-async function renderSlots() {
+// 渲染时段 (如果传了 filterDate，则只计算该日期的余量)
+async function renderSlots(filterDate) {
     const cfg = bookState.cfg;
     let html = '';
+    
     cfg.slots.forEach(s => {
-        let avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, bookState.date, s);
-        const full = avail <= 0; const sel = bookState.slot === s;
-        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}"><div>${s}</div><div class="slot-left">${full?'已满':'余'+avail}</div></div>`;
+        let avail = 0;
+        if (filterDate) {
+            // "先选日期"模式下，计算具体日期的时段余量
+            avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, filterDate, s);
+        } else {
+            // "先选时段"模式下，这里逻辑可以是显示"可选"或者总余量，通常显示"可选"
+            avail = 999; // 只要配置里有，先显示可选，点击后再去筛选日期
+        }
+        
+        const full = avail <= 0;
+        const sel = bookState.slot === s;
+        
+        html += `<div class="sel-item ${full?'disabled':''} ${sel?'selected':''}" onclick="${full?'':'pickSlot(\''+s+'\')'}">
+            <div>${s}</div>
+            <div class="slot-left">${full?'已满':(filterDate ? '余'+avail : '可选')}</div>
+        </div>`;
     });
     document.getElementById('timeGrid').innerHTML = html;
 }
 
-function pickSlot(s) { 
-    bookState.slot = s; 
-    renderSlots(); // 刷新高亮
-    checkSubmit(); 
+function pickDate(dt) {
+    bookState.date = dt;
+    if (bookState.mode === 'date') {
+        // 模式1：选完日期 -> 弹出时段 -> 渲染该日期的时段
+        document.getElementById('timeGroup').style.display = 'block';
+        renderSlots(dt);
+        // 刷新一下日期高亮
+        renderDates(null);
+    } else {
+        // 模式2：选完时段后选的日期 -> 结束
+        // 刷新日期高亮
+        renderDates(bookState.slot);
+    }
+    checkSubmit();
+}
+
+function pickSlot(s) {
+    bookState.slot = s;
+    if (bookState.mode === 'time') {
+        // 模式2：选完时段 -> 弹出日期 -> 渲染该时段可用的日期
+        document.getElementById('dateGroup').style.display = 'block';
+        renderDates(s);
+        // 刷新时段高亮
+        renderSlots(null);
+    } else {
+        // 模式1：选完日期后选的时段 -> 结束
+        // 刷新时段高亮
+        renderSlots(bookState.date);
+    }
+    checkSubmit();
 }
 
 function checkSubmit() {
-    const name = document.getElementById('inpName').value.trim(); const phone = document.getElementById('inpPhone').value.trim();
-    const ps = getPhoneStatus(phone); document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : ''); document.getElementById('phoneHint').textContent = ps.msg;
-    document.getElementById('btnSubmit').disabled = !(name.length>=2 && ps.valid && bookState.project && bookState.date && bookState.slot && document.getElementById('inpOperator').value.trim());
+    const name = document.getElementById('inpName').value.trim();
+    const phone = document.getElementById('inpPhone').value.trim();
+    const ps = getPhoneStatus(phone);
+    document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : '');
+    document.getElementById('phoneHint').textContent = ps.msg;
+    
+    const canSubmit = name.length>=2 && ps.valid && 
+                      bookState.project && bookState.date && bookState.slot && 
+                      document.getElementById('inpOperator').value.trim();
+                      
+    document.getElementById('btnSubmit').disabled = !canSubmit;
 }
-document.getElementById('inpName').addEventListener('input', checkSubmit); document.getElementById('inpOperator').addEventListener('input', checkSubmit);
-document.getElementById('inpPhone').addEventListener('input', function() { this.value = this.value.replace(/[^\d]/g, ''); checkSubmit(); });
+
+document.getElementById('inpName').addEventListener('input', checkSubmit);
+document.getElementById('inpOperator').addEventListener('input', checkSubmit);
+document.getElementById('inpPhone').addEventListener('input', function() { 
+    this.value = this.value.replace(/[^\d]/g, ''); 
+    checkSubmit(); 
+});
+
 document.getElementById('bookingForm').addEventListener('submit', async function(e) {
-    e.preventDefault(); const btn = document.getElementById('btnSubmit'); btn.disabled = true; btn.textContent = '提交中...';
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true; btn.textContent = '提交中...';
     try {
         const chk = await VikaDB.canBookAsync(bookState.project, bookState.date, bookState.slot);
         if (!chk.ok) throw new Error(chk.msg || '预约失败');
-        const rec = { name: document.getElementById('inpName').value.trim(), phone: document.getElementById('inpPhone').value.trim(), project: bookState.project, date: bookState.date, slot: bookState.slot, operator: document.getElementById('inpOperator').value.trim(), remark: document.getElementById('inpRemark').value.trim() };
+        
+        const rec = {
+            name: document.getElementById('inpName').value.trim(),
+            phone: document.getElementById('inpPhone').value.trim(),
+            project: bookState.project,
+            date: bookState.date,
+            slot: bookState.slot,
+            operator: document.getElementById('inpOperator').value.trim(),
+            remark: document.getElementById('inpRemark').value.trim()
+        };
+        
         const saved = await VikaDB.addRecord(rec);
-        ['Name','Phone','Project','Date','Time'].forEach(k => document.getElementById('cfm'+k).textContent = k==='Date' ? saved.date+' 周'+VikaDB.getWeekday(saved.date) : (k==='Time'?saved.slot:saved[k.toLowerCase()]));
-        document.getElementById('formCard').style.display = 'none'; document.getElementById('successCard').style.display = 'block';
-    } catch(err) { alert(err.message); } finally { btn.disabled = false; btn.textContent = '确认预约'; }
+        
+        document.getElementById('cfmName').textContent = saved.name;
+        document.getElementById('cfmPhone').textContent = saved.phone;
+        document.getElementById('cfmProject').textContent = saved.project;
+        document.getElementById('cfmDate').textContent = saved.date + ' 周' + VikaDB.getWeekday(saved.date);
+        document.getElementById('cfmTime').textContent = saved.slot;
+        
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('successCard').style.display = 'block';
+    } catch(err) {
+        alert(err.message);
+    } finally {
+        btn.disabled = false; btn.textContent = '确认预约';
+    }
 });
-function resetBooking() { document.getElementById('bookingForm').reset(); bookState = { project: null, date: null, slot: null, cfg: null }; document.getElementById('dateGroup').style.display = 'none'; document.getElementById('timeGroup').style.display = 'none'; document.getElementById('formCard').style.display = 'block'; document.getElementById('successCard').style.display = 'none'; checkSubmit(); }
+
+function resetBooking() {
+    document.getElementById('bookingForm').reset();
+    bookState = { project: null, mode: null, date: null, slot: null, cfg: null };
+    document.getElementById('modeGroup').style.display = 'none';
+    document.getElementById('dateGroup').style.display = 'none';
+    document.getElementById('timeGroup').style.display = 'none';
+    document.getElementById('formCard').style.display = 'block';
+    document.getElementById('successCard').style.display = 'none';
+    
+    // 清除模式选择高亮
+    document.querySelectorAll('#modeGroup .sel-item').forEach(x => x.classList.remove('selected'));
+    
+    checkSubmit();
+}
 
 // ==================== 仪表盘 (修复下拉筛选) ====================
 async function loadDashboard() {
@@ -528,7 +676,6 @@ async function loadDashboard() {
     const dayRecords = all.filter(r => r.date === date && r.status !== 'cancelled');
     const cfgs = await VikaDB.getConfigs();
     
-    // 🟢 自动填充时段下拉
     const allSlots = new Set();
     cfgs.forEach(c => c.slots.forEach(s => allSlots.add(s)));
     const slotSel = document.getElementById('dashSlot');
@@ -555,7 +702,6 @@ document.getElementById('dashDate').addEventListener('change', loadDashboard); d
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     
-    // 🟢 加载配置填充下拉
     if(document.getElementById('recProject').options.length <= 1) {
         const cfgs = await VikaDB.getConfigs();
         document.getElementById('recProject').innerHTML = '<option value="">全部</option>';
@@ -577,14 +723,12 @@ async function loadRecords() {
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
     
-    // 🟢 修复：显示列与中文状态
     let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
         const stCn = STATUS_MAP[r.status] || r.status;
         const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
         
-        // 🟢 修复：权限控制
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         if(currentUser.role !== 'operator') {
             btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
@@ -600,7 +744,6 @@ async function cancelRec(id) { if(confirm('取消此预约？')) { await VikaDB.
 function deleteRec(id) { requireSuperPwd(async () => { await VikaDB.deleteRecord(id); loadRecords(); }); }
 function batchDelete() { const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value); if(!ids.length) return alert('请选择'); requireSuperPwd(async () => { await VikaDB.batchDeleteRecords(ids); loadRecords(); }); }
 
-// 🟢 修复：导出Excel功能
 async function exportExcel() {
     if(typeof XLSX === 'undefined') return alert('组件加载中，请稍后重试');
     const list = await VikaDB.getRecords({ 
@@ -629,7 +772,7 @@ async function exportExcel() {
     XLSX.writeFile(wb, '预约数据.xlsx');
 }
 
-// ==================== 模版下载与导入 (修复) ====================
+// ==================== 模版下载与导入 ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
@@ -657,7 +800,6 @@ function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 function initShare() { const base = location.href.split('?')[0]; document.getElementById('userLink').value = base; document.getElementById('qrcode').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(base)}" alt="QR">`; }
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
 
-// 🟢 修复：模版下载 (确保XLSX存在)
 function downloadConfigTemplate() {
     if(typeof XLSX === 'undefined') return alert('组件加载中');
     const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }];
