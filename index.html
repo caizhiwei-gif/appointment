@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.0维格版)</title>
+    <title>画美线上预约系统 (v1.1 优化版)</title>
     
     <!-- 1. 引入 Excel 库 (SheetJS 官方源) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -60,14 +60,25 @@
         .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
-        .sel-item.selected { border-color: var(--primary); background: var(--primary); color: white; }
+        
+        /* ============== 修复手机端高亮问题 (START) ============== */
+        /* 使用 !important 确保选中状态样式覆盖 hover 状态，解决手机端点击后样式异常 */
+        .sel-item.selected, .sel-item.selected:hover { 
+            border-color: var(--primary) !important; 
+            background: var(--primary) !important; 
+            color: white !important; 
+        }
+        /* 强制选中项内部的所有子元素文字变白 */
+        .sel-item.selected * { 
+            color: rgba(255,255,255,0.95) !important; 
+        }
+        /* ============== 修复手机端高亮问题 (END) ============== */
+
         .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
         
         .date-day { font-size: 1.1rem; font-weight: bold; }
         .date-wd { font-size: 0.7rem; color: var(--text2); margin-top: 3px; }
-        .sel-item.selected .date-wd { color: rgba(255,255,255,0.8); }
         .slot-left { font-size: 0.7rem; color: var(--success); margin-top: 3px; }
-        .sel-item.selected .slot-left { color: rgba(255,255,255,0.8); }
         
         .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-primary { background: linear-gradient(135deg, var(--primary), #667eea); color: white; }
@@ -180,7 +191,7 @@
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
     <div class="login-box">
-        <div class="login-header"><h1>🏥 画美线上预约系统</h1></p></div>
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内双向选择版</p></div>
         <form onsubmit="doLogin(event)">
             <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
             <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
@@ -263,14 +274,11 @@
         </div>
     </div>
 
-    <!-- 3. 预约记录 (统计增强版) -->
+    <!-- 3. 预约记录 -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
-            
-            <!-- 统计卡片区域 -->
             <div class="overview-row" id="recOverview"></div>
-            
             <div class="filter-bar">
                 <div class="filter-item"><label>预约日期 (起)</label><input type="date" class="form-control" id="recStart"></div>
                 <div class="filter-item"><label>预约日期 (止)</label><input type="date" class="form-control" id="recEnd"></div>
@@ -392,6 +400,8 @@ const VikaDB = {
         return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
     },
     async updateRecordStatus(id, status) { await this.request(DST_RECORDS, 'PATCH', { status: status }, id); },
+    // 🟢 新增：更新备注功能
+    async updateRecordRemark(id, remark) { await this.request(DST_RECORDS, 'PATCH', { remark: remark }, id); },
     async deleteRecord(id) { await this.request(DST_RECORDS, 'DELETE', null, id); },
     async batchDeleteRecords(ids) { await this.request(DST_RECORDS, 'DELETE', null, ids.join(',')); },
     async fetchActiveRecords(pName) {
@@ -418,7 +428,7 @@ var currentUser = null; var superPwdCallback = null; var recordsCache = [];
 const PERMS = {
     superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
-    operator: ['booking','dashboard','records'] // 仅取消权限
+    operator: ['booking','dashboard','records'] 
 };
 function hasPerm(perm) { if (!currentUser) return false; return PERMS[currentUser.role]?.includes(perm) || false; }
 function applyPerms() {
@@ -700,7 +710,7 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 (统计增强版) ====================
+// ==================== 记录管理 (修复：下拉/列/权限/导出 + 🟢 预约人/备注编辑) ====================
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     
@@ -720,22 +730,19 @@ async function loadRecords() {
     });
     if (currentUser.role === 'operator') list = list.filter(r => r.createdBy === currentUser.username);
     
-    // 🟢 统计增强逻辑 🟢
-    const pending = list.filter(r => r.status === 'confirmed').length;
-    const success = list.filter(r => r.status === 'success').length;
-    const cancelled = list.filter(r => r.status === 'cancelled').length;
-
-    document.getElementById('recOverview').innerHTML = `
-        <div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>
-        <div class="overview-card"><div class="overview-val" style="color:#1890ff;">${pending}</div><div class="overview-lbl">待确认</div></div>
-        <div class="overview-card"><div class="overview-val" style="color:#52c41a;">${success}</div><div class="overview-lbl">已确认</div></div>
-        <div class="overview-card"><div class="overview-val" style="color:#ff4d4f;">${cancelled}</div><div class="overview-lbl">已取消</div></div>
-    `;
+    document.getElementById('recOverview').innerHTML = `<div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>`;
     document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
     
-    let html = `<table class="data-tbl"><thead><tr><th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th><th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th><th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
+    // 🟢 修改表头：增加 预约人 和 备注
+    let html = `<table class="data-tbl"><thead><tr>
+        <th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th>
+        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th>
+        <th>预约人</th><th style="min-width:150px">备注 (点击修改)</th>
+        <th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th>
+        </tr></thead><tbody>`;
+        
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
         const stCn = STATUS_MAP[r.status] || r.status;
@@ -746,10 +753,35 @@ async function loadRecords() {
             btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
         }
         
-        html += `<tr data-id="${r.id}"><td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td><td>${r.name}</td><td>${r.phone||'-'}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td><td>${r.createdBy||'-'}</td><td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td><td><div class="btn-group">${btns}</div></td></tr>`;
+        // 🟢 修改行数据：填充预约人，增加可编辑备注输入框
+        html += `<tr data-id="${r.id}">
+            <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
+            <td>${r.name}</td>
+            <td>${r.phone||'-'}</td>
+            <td>${r.project}</td>
+            <td>${r.date}</td>
+            <td>${r.slot}</td>
+            <td>${r.operator||'-'}</td>
+            <td><input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无"></td>
+            <td>${r.createdBy||'-'}</td>
+            <td>${createTime}</td>
+            <td><span class="status ${sc}">${stCn}</span></td>
+            <td><div class="btn-group">${btns}</div></td>
+        </tr>`;
     });
     tbl.innerHTML = html + '</tbody></table>';
 }
+
+// 🟢 保存备注的函数
+async function saveRemark(id, val) {
+    try {
+        await VikaDB.updateRecordRemark(id, val);
+        console.log('Remark updated');
+    } catch(e) {
+        alert('备注保存失败: ' + e.message);
+    }
+}
+
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
 async function confirmRec(id) { if(confirm('确认此预约？')) { await VikaDB.updateRecordStatus(id, 'success', {}); loadRecords(); } }
 async function cancelRec(id) { if(confirm('取消此预约？')) { await VikaDB.updateRecordStatus(id, 'cancelled', {}); loadRecords(); } }
@@ -767,13 +799,17 @@ async function exportExcel() {
         status: document.getElementById('recStatus').value
     });
     if(!list.length) return alert('当前没有数据可导出');
+    
+    // 🟢 导出数据增加 预约人 和 备注
     const data = list.map((r,i) => ({ 
         '序号': i+1, 
         '姓名': r.name, 
         '电话': r.phone||'', 
         '项目': r.project, 
         '日期': r.date, 
-        '时段': r.slot, 
+        '时段': r.slot,
+        '预约人': r.operator||'',
+        '备注': r.remark||'',
         '状态': STATUS_MAP[r.status]||r.status,
         '创建人': r.createdBy||'',
         '创建时间': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
@@ -864,4 +900,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
