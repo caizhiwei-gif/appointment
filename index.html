@@ -462,10 +462,11 @@ const VikaDB = {
         return list.sort((a,b) => b.createdAt - a.createdAt);
     },
     async addRecord(r) {
-        const fields = { ...r, status: 'confirmed', createdBy: currentUser.username };
-        const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
-        return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
-    },
+    // ⭐ 修改点：这里改成 currentUser.name，这样保存的就是姓名了
+    const fields = { ...r, status: 'confirmed', createdBy: currentUser.name };
+    const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
+    return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
+},
     async updateRecordStatus(id, status) { await this.request(DST_RECORDS, 'PATCH', { status: status }, id); },
     async updateRecordRemark(id, remark) { await this.request(DST_RECORDS, 'PATCH', { remark: remark }, id); },
     async deleteRecord(id) { await this.request(DST_RECORDS, 'DELETE', null, id); },
@@ -836,7 +837,9 @@ async function loadRecords() {
             <td class="copy-cell" onclick="if(event.target.tagName!=='INPUT') copyText('${r.remark||'-'}')">
                 <input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无">
             </td>
-            <td>${r.createdBy||'-'}</td><td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
+            <!-- ⭐ 修改点：增加了 class="copy-cell" 和 onclick="copyText(...)" -->
+<td class="copy-cell" onclick="copyText('${r.createdBy||'-'}')">${r.createdBy||'-'}</td>
+<td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
             <td><div class="btn-group">${btns}</div></td>
         </tr>`;
     });
@@ -1151,4 +1154,5 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
 
