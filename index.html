@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.8 排除日期版)</title>
+    <title>画美线上预约系统 (v1.9 隐私保护版)</title>
     
-    <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <!-- 2. 引入 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <style>
-        /* ================= 样式部分 ================= */
+        /* ================= 样式部分 (保持不变) ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -59,20 +57,16 @@
         .form-hint.error { color: var(--danger); }
         .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
-        
         .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
         .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
-        
         .sel-item.selected, .sel-item.selected:hover { border-color: var(--primary) !important; background: var(--primary) !important; color: white !important; }
         .sel-item.selected * { color: rgba(255,255,255,0.95) !important; }
         .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
-        
         .date-day { font-size: 1.1rem; font-weight: bold; }
         .date-wd { font-size: 0.7rem; color: var(--text2); margin-top: 3px; }
         .slot-left { font-size: 0.7rem; color: var(--success); margin-top: 3px; }
-        
         .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-primary { background: linear-gradient(135deg, var(--primary), #667eea); color: white; }
         .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74,144,217,0.4); }
@@ -112,12 +106,10 @@
         .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
         .data-tbl td:last-child { white-space: nowrap; min-width: 220px; width: 1%; }
-        
         .draggable-row { cursor: move; }
         .draggable-row:active { background: #f0f5ff; }
         .sort-handle { cursor: grab; color: #999; font-size: 1.2rem; padding: 0 5px; }
         .sort-handle:hover { color: var(--primary); }
-        
         .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
         .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
         .slot-tbl th { background: var(--bg); }
@@ -164,8 +156,6 @@
         .ur-super { background: #f9f0ff; color: #722ed1; }
         .ur-admin { background: #fff7e6; color: #fa8c16; }
         .ur-op { background: #e6fffb; color: #13c2c2; }
-        
-        /* 优化时段选择 UI */
         .slot-config-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
         .slot-cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); }
         .slot-cfg-item:last-child { border-bottom: none; }
@@ -174,31 +164,23 @@
         .slot-cfg-opts { display: flex; gap: 15px; }
         .slot-radio { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
         .slot-radio input { accent-color: var(--primary); }
-
         .empty-box { text-align: center; padding: 40px 15px; color: var(--text2); }
         .empty-box h3 { color: var(--text); margin-bottom: 6px; font-size: 1rem; }
         .tip-box { background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 0.85rem; color: #1890ff; }
         .page { display: none; }
         .page.active { display: block; }
         .perm-hide { display: none !important; }
-        
-        /* 复制相关样式 */
         .copy-cell { cursor: pointer; position: relative; transition: color 0.2s; }
         .copy-cell:hover { color: var(--primary); background: rgba(74,144,217,0.05); }
         .copy-cell:active { transform: scale(0.98); }
         .copy-cell::after { content: '点击复制'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity 0.2s; white-space: nowrap; }
         .copy-cell:hover::after { opacity: 0.8; }
-        
-        /* Toast 提示 */
         .toast-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: white; padding: 12px 24px; border-radius: 8px; font-size: 0.95rem; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .toast-box.show { opacity: 1; }
-
-        /* 新增：排除日期标签样式 */
         .tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; min-height: 30px; }
         .exclude-tag { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
         .exclude-tag span { cursor: pointer; font-weight: bold; padding: 0 4px; }
         .exclude-tag span:hover { background: rgba(255,0,0,0.1); border-radius: 50%; }
-
         @media (max-width: 768px) {
             .navbar { padding: 12px; }
             .navbar h1 { font-size: 1.1rem; }
@@ -304,12 +286,17 @@
                 <div class="filter-btn"><button class="btn btn-primary" onclick="loadRecords()">🔍 查询</button></div>
                 <div class="filter-btn" data-perm="export"><button type="button" class="btn btn-success" onclick="exportExcel()">📊 导出Excel</button></div>
                 <div class="filter-btn" data-perm="batchdel"><button class="btn btn-danger" onclick="batchDelete()">🗑️ 批量删除</button></div>
+                
+                <!-- 新增：仅超管可见的手机号开关 -->
+                <div class="filter-btn perm-hide" data-perm="reveal_phone">
+                    <button id="btnPhoneToggle" class="btn btn-secondary" onclick="togglePhoneMask()">🙈 已隐藏手机号</button>
+                </div>
             </div>
             <div class="card"><div class="card-header"><h2>📋 预约记录详情</h2><p id="recSubtitle">-</p></div><div class="tbl-wrap" id="recTable"></div></div>
         </div>
     </div>
 
-    <!-- 4. 系统配置 (修复：支持拖拽+批量更新+新规则+黑名单) -->
+    <!-- 4. 系统配置 -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -361,8 +348,6 @@
             <input type="hidden" id="cfgId">
             <div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div>
             <div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required><div class="form-hint">规则：从明天起算，共多少天 (例如设为10，即开放明天起共10天)</div></div>
-            
-            <!-- 新增：排除特定日期 -->
             <div class="form-group" style="background: #fffbe6; padding: 10px; border-radius: 8px; border:1px solid #ffe58f;">
                 <label style="color:#faad14;">⛔ 排除特定日期 (特殊情况不放号)</label>
                 <div style="display:flex; gap:8px; margin-bottom:8px;">
@@ -372,7 +357,6 @@
                 <div id="cfgExcludeList" class="tag-container"></div>
                 <div class="form-hint">在此列表中的日期，即使用户在“可预约天数”范围内也无法预约。</div>
             </div>
-
             <div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div>
             <div class="form-group"><label>可预约时段 (09:00 - 20:00) <span class="required">*</span></label>
                 <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">✅ 请在下方勾选开放的时段，未勾选即为排除</div>
@@ -397,7 +381,6 @@ const DST_USERS   = "dstaU2jlgkPNkpDyfE";
 const STATUS_MAP = { 'confirmed': '待确认', 'success': '预约成功', 'cancelled': '已取消' };
 
 // ==================== 工具函数 ====================
-// 显示 Toast 提示
 function showToast(msg) {
     const box = document.getElementById('toastBox');
     box.textContent = msg;
@@ -405,7 +388,6 @@ function showToast(msg) {
     setTimeout(() => { box.classList.remove('show'); }, 2000);
 }
 
-// 复制文本到剪贴板
 function copyText(txt) {
     if(!txt || txt === '-') return;
     navigator.clipboard.writeText(txt).then(() => {
@@ -452,7 +434,6 @@ const VikaDB = {
         const list = (await this.request(DST_CONFIGS)).map(r => ({ 
             ...r.fields, id: r.recordId, 
             slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : [],
-            // 🟢 新增：读取排除日期
             excludedDates: r.fields.excludedDates ? String(r.fields.excludedDates).split(',') : [],
             sort: (r.fields.sort === undefined || r.fields.sort === null) ? 999 : Number(r.fields.sort)
         }));
@@ -464,7 +445,6 @@ const VikaDB = {
             days: parseInt(c.days), 
             capacity: parseInt(c.capacity), 
             slots: c.slots.join(','),
-            // 🟢 新增：保存排除日期
             excludedDates: c.excludedDates.join(',')
         };
         if(c.sort !== undefined) fields.sort = c.sort;
@@ -501,19 +481,14 @@ const VikaDB = {
         if(!cfg) return {ok:false, msg:'项目不存在'};
         return { ok: (cfg.capacity - count) > 0, msg: '已满' };
     },
-    // 🟢 修复日期规则：不可以约当天。从 i=1 (明天) 开始 + 过滤排除日期
     async getAvailDates(cfg) {
         const dates = []; const today = new Date();
-        const blacklist = cfg.excludedDates || []; // 获取排除列表
-        
-        for(let i=1; i<=cfg.days; i++) { // i=1 表示明天开始，包含第days天
+        const blacklist = cfg.excludedDates || [];
+        for(let i=1; i<=cfg.days; i++) { 
             const d = new Date(today); 
             d.setDate(today.getDate()+i); 
             const dateStr = d.toISOString().split('T')[0];
-            
-            // 🟢 如果在黑名单中，则跳过
             if (blacklist.includes(dateStr)) continue;
-            
             dates.push(dateStr); 
         }
         return dates;
@@ -523,11 +498,12 @@ const VikaDB = {
 
 // ==================== 全局状态 ====================
 var currentUser = null; var superPwdCallback = null; var recordsCache = []; 
-// 新增：临时存储当前编辑的排除日期
 let currentExcludedDates = [];
+let isPhoneRevealed = false; // 默认不显示完整手机号
 
 const PERMS = {
-    superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel'],
+    // 🟢 新增 reveal_phone 权限
+    superadmin: ['booking','dashboard','records','config','share','users','export','batchdel','delete','confirm','cancel','reveal_phone'],
     admin: ['booking','dashboard','records','config','share','confirm','cancel'],
     operator: ['booking','dashboard','records'] 
 };
@@ -772,7 +748,33 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 (含点击复制功能) ====================
+// ==================== 记录管理 (含点击复制功能 + 隐私保护) ====================
+
+// 🟢 切换显示/隐藏手机号
+function togglePhoneMask() {
+    isPhoneRevealed = !isPhoneRevealed;
+    const btn = document.getElementById('btnPhoneToggle');
+    if(isPhoneRevealed) {
+        btn.textContent = '👀 已显示手机号';
+        btn.className = 'btn btn-purple';
+    } else {
+        btn.textContent = '🙈 已隐藏手机号';
+        btn.className = 'btn btn-secondary';
+    }
+    loadRecords();
+}
+
+// 🟢 获取显示用的手机号 (处理隐私)
+function getDisplayPhone(phone) {
+    if (!phone) return '-';
+    // 只有 超管 且 开关打开 才显示全部
+    if (currentUser && currentUser.role === 'superadmin' && isPhoneRevealed) {
+        return phone;
+    }
+    // 其他情况脱敏
+    return String(phone).replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
+}
+
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     if(document.getElementById('recProject').options.length <= 1) {
@@ -816,14 +818,15 @@ async function loadRecords() {
         const stCn = STATUS_MAP[r.status] || r.status;
         const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
-        // 🟢 修改点：确认按钮不再需要 confirm
         if(currentUser.role !== 'operator') btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
         
-        // 🟢 修改点：增加 copy-cell 类和 onclick 事件
+        // 🟢 处理电话显示
+        const displayPhone = getDisplayPhone(r.phone);
+
         html += `<tr data-id="${r.id}">
             <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
             <td class="copy-cell" onclick="copyText('${r.name}')">${r.name}</td>
-            <td class="copy-cell" onclick="copyText('${r.phone||'-'}')">${r.phone||'-'}</td>
+            <td class="copy-cell" onclick="copyText('${displayPhone}')">${displayPhone}</td>
             <td class="copy-cell" onclick="copyText('${r.project}')">${r.project}</td>
             <td>${r.date}</td><td>${r.slot}</td>
             <td class="copy-cell" onclick="copyText('${r.operator||'-'}')">${r.operator||'-'}</td>
@@ -870,7 +873,7 @@ async function exportExcel() {
     XLSX.utils.book_append_sheet(wb, ws, '预约记录'); XLSX.writeFile(wb, '预约数据.xlsx');
 }
 
-// ==================== 🟢 增强的项目配置管理 (新时段规则 + 黑名单) ====================
+// ==================== 🟢 增强的项目配置管理 ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>排序</th><th>项目</th><th>天数</th><th>排除日期</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody id="cfgTbody">`;
@@ -955,17 +958,14 @@ function openCfgModal(cfg) {
     document.getElementById('cfgDays').value = cfg ? cfg.days : ''; 
     document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; 
     
-    // --- 新增：初始化排除日期 ---
     currentExcludedDates = cfg ? (cfg.excludedDates || []) : [];
     renderExcludeTags();
-    document.getElementById('cfgExcludeInput').value = ''; // 重置输入框
-    // -------------------------
+    document.getElementById('cfgExcludeInput').value = '';
 
     const container = document.getElementById('cfgSlots');
     container.innerHTML = '';
     const currentSlots = cfg ? cfg.slots : [];
     
-    // 生成 09:00 到 20:00 的时段
     const startHour = 9;
     const endHour = 20;
     
@@ -1019,11 +1019,9 @@ function removeExcludeDate(dt) {
     renderExcludeTags();
 }
 
-// 🟢 修改点：保存配置时收集 Radio 的值 和 排除日期
 async function saveCfg(e) { 
     e.preventDefault(); 
     const slots = []; 
-    // 遍历所有可能的时段 Radio
     const startHour = 9; 
     const endHour = 20;
     for (let i = startHour; i < endHour; i++) {
@@ -1041,7 +1039,6 @@ async function saveCfg(e) {
         days: parseInt(document.getElementById('cfgDays').value), 
         capacity: parseInt(document.getElementById('cfgCap').value), 
         slots: slots.sort(),
-        // 保存排除日期
         excludedDates: currentExcludedDates
     };
     await VikaDB.saveConfig(cfg); 
@@ -1069,7 +1066,46 @@ function initShare() { const base = location.href.split('?')[0]; document.getEle
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
 function downloadConfigTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '项目模板'); XLSX.writeFile(wb, '项目配置导入模板.xlsx'); }
 function downloadUserTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '用户模板'); XLSX.writeFile(wb, '用户导入模板.xlsx'); }
-// 🟢 修复版：导入用户 (增加延时，防止触发 QPS 限制)
+
+// 🟢 修复版：导入配置 (增加延时)
+function importConfigs(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    
+    const reader = new FileReader(); 
+    reader.onload = async function(ev) { 
+        try { 
+            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+            
+            let count = 0; 
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            const orgText = btn.textContent;
+            btn.textContent = '导入中...';
+            btn.disabled = true;
+
+            for (let row of data) { 
+                const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s); 
+                await VikaDB.saveConfig({ name: row['项目名称'], days: row['可约天数'], capacity: row['时段容量'], slots: slots, excludedDates: [] }); 
+                count++; 
+                await new Promise(r => setTimeout(r, 600));
+            } 
+            alert(`✅ 已成功导入 ${count} 个配置`); 
+            loadCfgTable(); 
+            btn.textContent = orgText;
+            btn.disabled = false;
+        } catch (err) { 
+            alert('❌ 导入中断：' + err.message); 
+            loadCfgTable();
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            if(btn) { btn.textContent = '📤 导入项目配置'; btn.disabled = false; }
+        } 
+    }; 
+    reader.readAsArrayBuffer(file); 
+    e.target.value = ''; 
+}
+
+// 🟢 修复版：导入用户 (增加延时)
 function importUsers(e) { 
     const file = e.target.files[0]; 
     if (!file) return; 
@@ -1089,17 +1125,8 @@ function importUsers(e) {
             for (let row of data) { 
                 const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' }; 
                 const roleCode = roleMap[row['角色']] || 'operator'; 
-                
-                await VikaDB.saveUser({ 
-                    username: row['用户名'], 
-                    name: row['姓名'], 
-                    password: String(row['密码']), 
-                    role: roleCode 
-                }); 
+                await VikaDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']), role: roleCode }); 
                 count++; 
-                
-                // ⭐ 关键修改：每处理一行，暂停 600 毫秒 (0.6秒)
-                // 2 QPS 意味着 1秒2次，即间隔至少500ms，设为600ms比较保险
                 await new Promise(r => setTimeout(r, 600));
             } 
             alert(`✅ 已成功导入 ${count} 个用户`); 
@@ -1108,57 +1135,9 @@ function importUsers(e) {
             btn.disabled = false;
         } catch (err) { 
             alert('❌ 导入中断：' + err.message); 
-            // 即使报错也刷新一下表格，显示已经导入成功的部分
             loadUserTable();
-            // 恢复按钮状态
             const btn = document.querySelector('button[onclick="document.getElementById(\'fileUserImport\').click()"]');
             if(btn) { btn.textContent = '📤 导入用户'; btn.disabled = false; }
-        } 
-    }; 
-    reader.readAsArrayBuffer(file); 
-    e.target.value = ''; 
-}
-// 🟢 修复版：导入配置 (增加延时，防止触发 QPS 限制)
-function importConfigs(e) { 
-    const file = e.target.files[0]; 
-    if (!file) return; 
-    
-    const reader = new FileReader(); 
-    reader.onload = async function(ev) { 
-        try { 
-            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
-            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
-            
-            let count = 0; 
-            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
-            const orgText = btn.textContent;
-            btn.textContent = '导入中...';
-            btn.disabled = true;
-
-            for (let row of data) { 
-                const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s); 
-                
-                await VikaDB.saveConfig({ 
-                    name: row['项目名称'], 
-                    days: row['可约天数'], 
-                    capacity: row['时段容量'], 
-                    slots: slots,
-                    excludedDates: [] // 默认导入时不设置排除日期
-                }); 
-                count++; 
-
-                // ⭐ 关键修改：每处理一行，暂停 600 毫秒
-                await new Promise(r => setTimeout(r, 600));
-            } 
-            alert(`✅ 已成功导入 ${count} 个配置`); 
-            loadCfgTable(); 
-            btn.textContent = orgText;
-            btn.disabled = false;
-        } catch (err) { 
-            alert('❌ 导入中断：' + err.message); 
-            loadCfgTable();
-            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
-            if(btn) { btn.textContent = '📤 导入项目配置'; btn.disabled = false; }
         } 
     }; 
     reader.readAsArrayBuffer(file); 
@@ -1169,4 +1148,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
