@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.6)</title>
+    <title>画美线上预约系统 (v1.7 优化版)</title>
     
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -164,14 +164,35 @@
         .ur-super { background: #f9f0ff; color: #722ed1; }
         .ur-admin { background: #fff7e6; color: #fa8c16; }
         .ur-op { background: #e6fffb; color: #13c2c2; }
-        .slot-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-        .slot-row input { flex: 1; }
+        
+        /* 优化时段选择 UI */
+        .slot-config-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+        .slot-cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); }
+        .slot-cfg-item:last-child { border-bottom: none; }
+        .slot-cfg-item:hover { background: var(--bg); }
+        .slot-cfg-label { font-weight: 600; font-size: 0.9rem; color: var(--primary); width: 120px; }
+        .slot-cfg-opts { display: flex; gap: 15px; }
+        .slot-radio { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
+        .slot-radio input { accent-color: var(--primary); }
+
         .empty-box { text-align: center; padding: 40px 15px; color: var(--text2); }
         .empty-box h3 { color: var(--text); margin-bottom: 6px; font-size: 1rem; }
         .tip-box { background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 0.85rem; color: #1890ff; }
         .page { display: none; }
         .page.active { display: block; }
         .perm-hide { display: none !important; }
+        
+        /* 复制相关样式 */
+        .copy-cell { cursor: pointer; position: relative; transition: color 0.2s; }
+        .copy-cell:hover { color: var(--primary); background: rgba(74,144,217,0.05); }
+        .copy-cell:active { transform: scale(0.98); }
+        .copy-cell::after { content: '点击复制'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity 0.2s; white-space: nowrap; }
+        .copy-cell:hover::after { opacity: 0.8; }
+        
+        /* Toast 提示 */
+        .toast-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: white; padding: 12px 24px; border-radius: 8px; font-size: 0.95rem; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .toast-box.show { opacity: 1; }
+
         @media (max-width: 768px) {
             .navbar { padding: 12px; }
             .navbar h1 { font-size: 1.1rem; }
@@ -187,6 +208,9 @@
     </style>
 </head>
 <body>
+
+<!-- Toast 提示框 -->
+<div id="toastBox" class="toast-box"></div>
 
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
@@ -279,7 +303,7 @@
         </div>
     </div>
 
-    <!-- 4. 系统配置 (修复：支持拖拽+批量更新) -->
+    <!-- 4. 系统配置 (修复：支持拖拽+批量更新+新规则) -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -324,7 +348,20 @@
 </div>
 
 <!-- 模态框 -->
-<div class="modal-mask" id="cfgModal"><div class="modal-box"><div class="modal-head"><h3 id="cfgModalTitle">添加项目</h3><button class="modal-close" onclick="hideModal('cfgModal')">✕</button></div><form id="cfgForm" onsubmit="saveCfg(event)"><input type="hidden" id="cfgId"><div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div><div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required></div><div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div><div class="form-group"><label>可预约时段 <span class="required">*</span></label><div id="cfgSlots"></div><button type="button" class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="addSlotRow()">➕ 添加</button></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('cfgModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div></form></div></div>
+<div class="modal-mask" id="cfgModal"><div class="modal-box"><div class="modal-head"><h3 id="cfgModalTitle">添加项目</h3><button class="modal-close" onclick="hideModal('cfgModal')">✕</button></div>
+<form id="cfgForm" onsubmit="saveCfg(event)">
+    <input type="hidden" id="cfgId">
+    <div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div>
+    <div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required><div class="form-hint">规则：从明天起算，共多少天 (例如设为10，即开放明天起共10天)</div></div>
+    <div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div>
+    <div class="form-group"><label>可预约时段 (09:00 - 20:00) <span class="required">*</span></label>
+        <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">✅ 请在下方勾选开放的时段，未勾选即为排除</div>
+        <div id="cfgSlots" class="slot-config-list"></div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('cfgModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div>
+</form>
+</div></div>
+
 <div class="modal-mask" id="userModal"><div class="modal-box"><div class="modal-head"><h3 id="userModalTitle">添加用户</h3><button class="modal-close" onclick="hideModal('userModal')">✕</button></div><form id="userForm" onsubmit="saveUser(event)"><input type="hidden" id="userId"><div class="form-group"><label>用户名 <span class="required">*</span></label><input type="text" class="form-control" id="userUsername" required></div><div class="form-group"><label>姓名 <span class="required">*</span></label><input type="text" class="form-control" id="userName" required></div><div class="form-group"><label>密码</label><input type="password" class="form-control" id="userPwd"></div><div class="form-group"><label>角色 <span class="required">*</span></label><select class="form-control" id="userRole" required><option value="operator">预约人员</option><option value="admin">管理员</option><option value="superadmin">超级管理员</option></select></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('userModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div></form></div></div>
 <div class="modal-mask" id="superPwdModal"><div class="modal-box" style="max-width:360px;"><div class="modal-head"><h3>🔐 超管验证</h3><button class="modal-close" onclick="hideModal('superPwdModal')">✕</button></div><form onsubmit="verifySuperPwd(event)"><div class="form-group"><label>请输入超级管理员密码</label><input type="password" class="form-control" id="superPwdInput" required></div><div class="modal-foot" style="border:none;padding-top:0;"><button type="button" class="btn btn-secondary" onclick="hideModal('superPwdModal')">取消</button><button type="submit" class="btn btn-purple">确认</button></div></form></div></div>
 <div class="modal-mask" id="pwdModal"><div class="modal-box" style="max-width:400px;"><div class="modal-head"><h3>🔐 修改密码</h3><button class="modal-close" onclick="hideModal('pwdModal')">✕</button></div><form onsubmit="doChangePwd(event)"><div class="form-group"><label>原密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdOld" required></div><div class="form-group"><label>新密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdNew" minlength="4" required></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('pwdModal')">取消</button><button type="submit" class="btn btn-success">确认修改</button></div></form></div></div>
@@ -337,6 +374,25 @@ const DST_CONFIGS = "dst9KJZJj8nE2aVtmL";
 const DST_USERS   = "dstaU2jlgkPNkpDyfE"; 
 
 const STATUS_MAP = { 'confirmed': '待确认', 'success': '预约成功', 'cancelled': '已取消' };
+
+// ==================== 工具函数 ====================
+// 显示 Toast 提示
+function showToast(msg) {
+    const box = document.getElementById('toastBox');
+    box.textContent = msg;
+    box.classList.add('show');
+    setTimeout(() => { box.classList.remove('show'); }, 2000);
+}
+
+// 复制文本到剪贴板
+function copyText(txt) {
+    if(!txt || txt === '-') return;
+    navigator.clipboard.writeText(txt).then(() => {
+        showToast('已复制');
+    }).catch(() => {
+        showToast('复制失败');
+    });
+}
 
 // ==================== Vika DB 封装层 ====================
 const VikaDB = {
@@ -353,7 +409,6 @@ const VikaDB = {
         if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
         return res.data ? res.data.records : [];
     },
-    // 🟢 批量更新通用方法 (解决频繁请求报错问题)
     async batchUpdate(dstId, records) {
         let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
         const options = { 
@@ -372,7 +427,6 @@ const VikaDB = {
         u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
     },
     async deleteUser(id) { await this.request(DST_USERS, 'DELETE', null, id); },
-    // 🟢 读取配置时按 sort 字段排序，增加默认值兼容
     async getConfigs() {
         const list = (await this.request(DST_CONFIGS)).map(r => ({ 
             ...r.fields, id: r.recordId, 
@@ -417,9 +471,14 @@ const VikaDB = {
         if(!cfg) return {ok:false, msg:'项目不存在'};
         return { ok: (cfg.capacity - count) > 0, msg: '已满' };
     },
+    // 🟢 修复日期规则：不可以约当天。从 i=1 (明天) 开始
     async getAvailDates(cfg) {
         const dates = []; const today = new Date();
-        for(let i=0; i<cfg.days; i++) { const d = new Date(today); d.setDate(today.getDate()+i); dates.push(d.toISOString().split('T')[0]); }
+        for(let i=1; i<=cfg.days; i++) { // i=1 表示明天开始，包含第days天
+            const d = new Date(today); 
+            d.setDate(today.getDate()+i); 
+            dates.push(d.toISOString().split('T')[0]); 
+        }
         return dates;
     },
     getWeekday(s) { return ['日','一','二','三','四','五','六'][new Date(s).getDay()]; }
@@ -645,7 +704,7 @@ function resetBooking() {
 
 // ==================== 仪表盘 ====================
 async function loadDashboard() {
-    const date = document.getElementById('dashDate').value || new Date().toISOString().split('T')[0];
+    const date = document.getElementById('dashDate').value || new Date(new Date().getTime() + 86400000).toISOString().split('T')[0]; // Default tomorrow
     if(!document.getElementById('dashDate').value) document.getElementById('dashDate').value = date;
     const slot = document.getElementById('dashSlot').value;
     const div = document.getElementById('dashStats'); div.innerHTML = '<p>加载中...</p>';
@@ -673,7 +732,7 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 ====================
+// ==================== 记录管理 (含点击复制功能) ====================
 async function loadRecords() {
     const tbl = document.getElementById('recTable'); tbl.innerHTML = '<div style="padding:20px;text-align:center;">🔄 加载中...</div>';
     if(document.getElementById('recProject').options.length <= 1) {
@@ -708,8 +767,8 @@ async function loadRecords() {
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
     let html = `<table class="data-tbl"><thead><tr>
         <th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th>
-        <th>顾客</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th>
-        <th>预约人</th><th style="min-width:150px">备注 (点击修改)</th>
+        <th>顾客 (点击复制)</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th>
+        <th>预约人</th><th style="min-width:150px">备注 (点击复制/修改)</th>
         <th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th>
         </tr></thead><tbody>`;
     list.forEach(r => {
@@ -717,12 +776,20 @@ async function loadRecords() {
         const stCn = STATUS_MAP[r.status] || r.status;
         const createTime = r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN', {hour12:false}) : '-';
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
+        // 🟢 修改点：确认按钮不再需要 confirm
         if(currentUser.role !== 'operator') btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
+        
+        // 🟢 修改点：增加 copy-cell 类和 onclick 事件
         html += `<tr data-id="${r.id}">
             <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
-            <td>${r.name}</td><td>${r.phone||'-'}</td><td>${r.project}</td><td>${r.date}</td><td>${r.slot}</td>
-            <td>${r.operator||'-'}</td>
-            <td><input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无"></td>
+            <td class="copy-cell" onclick="copyText('${r.name}')">${r.name}</td>
+            <td class="copy-cell" onclick="copyText('${r.phone||'-'}')">${r.phone||'-'}</td>
+            <td class="copy-cell" onclick="copyText('${r.project}')">${r.project}</td>
+            <td>${r.date}</td><td>${r.slot}</td>
+            <td class="copy-cell" onclick="copyText('${r.operator||'-'}')">${r.operator||'-'}</td>
+            <td class="copy-cell" onclick="if(event.target.tagName!=='INPUT') copyText('${r.remark||'-'}')">
+                <input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无">
+            </td>
             <td>${r.createdBy||'-'}</td><td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
             <td><div class="btn-group">${btns}</div></td>
         </tr>`;
@@ -731,7 +798,15 @@ async function loadRecords() {
 }
 async function saveRemark(id, val) { try { await VikaDB.updateRecordRemark(id, val); } catch(e) { alert('备注保存失败: ' + e.message); } }
 function toggleAllCb(master) { document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = master.checked; }); }
-async function confirmRec(id) { if(confirm('确认此预约？')) { await VikaDB.updateRecordStatus(id, 'success', {}); loadRecords(); } }
+
+// 🟢 修改点：直接确认，无弹窗
+async function confirmRec(id) { 
+    // 直接发送请求
+    await VikaDB.updateRecordStatus(id, 'success', {}); 
+    loadRecords(); 
+    showToast('已确认成功'); 
+}
+
 async function cancelRec(id) { if(confirm('取消此预约？')) { await VikaDB.updateRecordStatus(id, 'cancelled', {}); loadRecords(); } }
 function deleteRec(id) { requireSuperPwd(async () => { await VikaDB.deleteRecord(id); loadRecords(); }); }
 function batchDelete() { const ids = Array.from(document.querySelectorAll('.row-cb:checked')).map(cb => cb.value); if(!ids.length) return alert('请选择'); requireSuperPwd(async () => { await VikaDB.batchDeleteRecords(ids); loadRecords(); }); }
@@ -755,7 +830,7 @@ async function exportExcel() {
     XLSX.utils.book_append_sheet(wb, ws, '预约记录'); XLSX.writeFile(wb, '预约数据.xlsx');
 }
 
-// ==================== 🟢 增强的项目配置管理 ====================
+// ==================== 🟢 增强的项目配置管理 (新时段规则) ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>排序</th><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody id="cfgTbody">`;
@@ -767,7 +842,7 @@ async function loadCfgTable() {
             <td><strong>${c.name}</strong></td>
             <td>${c.days}</td>
             <td>${c.capacity}</td>
-            <td>${c.slots.join(',')}</td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.slots.join(',')}">${c.slots.join(', ')}</td>
             <td><div class="btn-group">
                 <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', -1)" ${first?'disabled':''}>⬆️</button>
                 <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', 1)" ${last?'disabled':''}>⬇️</button>
@@ -790,7 +865,6 @@ async function loadCfgTable() {
     }
 }
 
-// 🟢 统一的保存顺序逻辑 (批量处理，防止报错)
 async function saveOrder() {
     const rows = document.querySelectorAll('#cfgTbody tr');
     const title = document.querySelector('#page-config h2');
@@ -804,8 +878,6 @@ async function saveOrder() {
             const id = rows[i].getAttribute('data-id');
             updates.push({ recordId: id, fields: { sort: i } });
         }
-        
-        // 分批发送，每次10条
         const chunkSize = 10;
         for (let i = 0; i < updates.length; i += chunkSize) {
             const chunk = updates.slice(i, i + chunkSize);
@@ -832,16 +904,77 @@ function moveCfg(id, dir) {
 }
 
 async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.id === id)); }
-function openCfgModal(cfg) { document.getElementById('cfgId').value = cfg ? cfg.id : ''; document.getElementById('cfgName').value = cfg ? cfg.name : ''; document.getElementById('cfgDays').value = cfg ? cfg.days : ''; document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; document.getElementById('cfgSlots').innerHTML = ''; (cfg?cfg.slots:['09:00-10:00']).forEach(s => addSlotRow(...s.split('-'))); document.getElementById('cfgModal').classList.add('show'); }
-function addSlotRow(s, e) { const div = document.createElement('div'); div.className = 'slot-row'; div.innerHTML = `<input type="time" class="form-control" value="${s||''}" required><span>至</span><input type="time" class="form-control" value="${e||''}" required><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`; document.getElementById('cfgSlots').appendChild(div); }
+
+// 🟢 修改点：打开配置模态框，渲染 09:00-20:00 的互斥选项列表
+function openCfgModal(cfg) { 
+    document.getElementById('cfgId').value = cfg ? cfg.id : ''; 
+    document.getElementById('cfgName').value = cfg ? cfg.name : ''; 
+    document.getElementById('cfgDays').value = cfg ? cfg.days : ''; 
+    document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; 
+    
+    const container = document.getElementById('cfgSlots');
+    container.innerHTML = '';
+    const currentSlots = cfg ? cfg.slots : [];
+    
+    // 生成 09:00 到 20:00 的时段
+    const startHour = 9;
+    const endHour = 20;
+    
+    for (let i = startHour; i < endHour; i++) {
+        const timeStr = `${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`;
+        const isSelected = currentSlots.includes(timeStr);
+        
+        // 创建 HTML 结构：时段名 + [可约] Radio + [排除] Radio
+        // 利用 radio 的 name 属性实现互斥
+        const div = document.createElement('div');
+        div.className = 'slot-cfg-item';
+        div.innerHTML = `
+            <span class="slot-cfg-label">${timeStr}</span>
+            <div class="slot-cfg-opts">
+                <label class="slot-radio">
+                    <input type="radio" name="slot_${i}" value="1" ${isSelected ? 'checked' : ''}>
+                    <span>✅ 可约</span>
+                </label>
+                <label class="slot-radio" style="color:#999">
+                    <input type="radio" name="slot_${i}" value="0" ${!isSelected ? 'checked' : ''}>
+                    <span>⛔ 排除</span>
+                </label>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    document.getElementById('cfgModal').classList.add('show'); 
+}
+
+// 🟢 修改点：保存配置时收集 Radio 的值
 async function saveCfg(e) { 
     e.preventDefault(); 
     const slots = []; 
-    document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { const i = row.querySelectorAll('input'); if(i[0].value && i[1].value) slots.push(i[0].value+'-'+i[1].value); }); 
-    const cfg = { id: document.getElementById('cfgId').value, name: document.getElementById('cfgName').value, days: parseInt(document.getElementById('cfgDays').value), capacity: parseInt(document.getElementById('cfgCap').value), slots: slots.sort() };
+    // 遍历所有可能的时段 Radio
+    const startHour = 9; 
+    const endHour = 20;
+    for (let i = startHour; i < endHour; i++) {
+        const radios = document.getElementsByName(`slot_${i}`);
+        // 检查哪个 radio 被选中
+        for(let r of radios) {
+            if(r.checked && r.value === '1') {
+                slots.push(`${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`);
+            }
+        }
+    }
+    
+    const cfg = { 
+        id: document.getElementById('cfgId').value, 
+        name: document.getElementById('cfgName').value, 
+        days: parseInt(document.getElementById('cfgDays').value), 
+        capacity: parseInt(document.getElementById('cfgCap').value), 
+        slots: slots.sort() 
+    };
     await VikaDB.saveConfig(cfg); 
     hideModal('cfgModal'); loadCfgTable(); 
 }
+
 async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.deleteConfig(id); loadCfgTable(); } }
 
 // 🟢 用户管理列表 (超管可见密码)
@@ -870,4 +1003,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
