@@ -243,7 +243,7 @@
                     <div class="form-group" id="modeGroup" style="display:none;"><label>选择方式</label><div class="sel-grid sel-grid-2"><div class="sel-item" onclick="pickMode('date')">📅 先选日期</div><div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div></div></div>
                     <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
                     <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
-                    <div class="form-group"><label>预约人 <span class="required">*</span></label><input type="text" class="form-control" id="inpOperator" required></div>
+                    <div class="form-group"><label>预约人</label><input type="text" class="form-control" id="inpOperator"></div>
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
                     <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
                 </form>
@@ -667,7 +667,10 @@ function checkSubmit() {
     const ps = getPhoneStatus(phone);
     document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : '');
     document.getElementById('phoneHint').textContent = ps.msg;
-    const canSubmit = name.length>=2 && ps.valid && bookState.project && bookState.date && bookState.slot && document.getElementById('inpOperator').value.trim();
+    
+    // ⭐ 修改点：只检查 姓名、电话、项目、日期、时段，不再检查预约人
+    const canSubmit = name.length>=2 && ps.valid && bookState.project && bookState.date && bookState.slot;
+    
     document.getElementById('btnSubmit').disabled = !canSubmit;
 }
 
@@ -1148,3 +1151,4 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
