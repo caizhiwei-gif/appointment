@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.5 拖拽排序版)</title>
+    <title>画美线上预约系统 (v1.6 稳定排序版)</title>
     
-    <!-- 1. 引入 Excel 库 (SheetJS) -->
+    <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <!-- 2. 🟢 引入 拖拽排序库 (SortableJS) -->
+    <!-- 2. 引入 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <style>
@@ -65,10 +65,8 @@
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
         
-        /* 手机端高亮修复 */
         .sel-item.selected, .sel-item.selected:hover { border-color: var(--primary) !important; background: var(--primary) !important; color: white !important; }
         .sel-item.selected * { color: rgba(255,255,255,0.95) !important; }
-        
         .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
         
         .date-day { font-size: 1.1rem; font-weight: bold; }
@@ -115,7 +113,6 @@
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
         .data-tbl td:last-child { white-space: nowrap; min-width: 220px; width: 1%; }
         
-        /* 🟢 拖拽行样式 */
         .draggable-row { cursor: move; }
         .draggable-row:active { background: #f0f5ff; }
         .sort-handle { cursor: grab; color: #999; font-size: 1.2rem; padding: 0 5px; }
@@ -229,33 +226,11 @@
                 <div class="card-header"><h2>📋 在线预约</h2><p>请填写信息完成预约</p></div>
                 <form id="bookingForm">
                     <div class="form-group"><label>顾客姓名 <span class="required">*</span></label><input type="text" class="form-control" id="inpName" required></div>
-                    
-                    <div class="form-group">
-                        <label>联系电话 <span class="required">*</span></label>
-                        <input type="tel" class="form-control" id="inpPhone" maxlength="11" placeholder="请输入11位手机号码" required>
-                        <div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div>
-                    </div>
-                    
+                    <div class="form-group"><label>联系电话 <span class="required">*</span></label><input type="tel" class="form-control" id="inpPhone" maxlength="11" placeholder="请输入11位手机号码" required><div class="form-hint" id="phoneHint">请输入11位中国大陆手机号码</div></div>
                     <div class="form-group"><label>预约项目 <span class="required">*</span></label><select class="form-control" id="selProject" required><option value="">加载中...</option></select></div>
-                    
-                    <div class="form-group" id="modeGroup" style="display:none;">
-                        <label>选择方式</label>
-                        <div class="sel-grid sel-grid-2">
-                            <div class="sel-item" onclick="pickMode('date')">📅 先选日期</div>
-                            <div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div>
-                        </div>
-                    </div>
-
-                    <div class="form-group" id="dateGroup" style="display:none;">
-                        <label>预约日期 <span class="required">*</span></label>
-                        <div class="sel-grid" id="dateGrid"></div>
-                    </div>
-                    
-                    <div class="form-group" id="timeGroup" style="display:none;">
-                        <label>预约时段 <span class="required">*</span></label>
-                        <div class="sel-grid" id="timeGrid"></div>
-                    </div>
-                    
+                    <div class="form-group" id="modeGroup" style="display:none;"><label>选择方式</label><div class="sel-grid sel-grid-2"><div class="sel-item" onclick="pickMode('date')">📅 先选日期</div><div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div></div></div>
+                    <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
+                    <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
                     <div class="form-group"><label>预约人 <span class="required">*</span></label><input type="text" class="form-control" id="inpOperator" required></div>
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
                     <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
@@ -304,7 +279,7 @@
         </div>
     </div>
 
-    <!-- 4. 系统配置 (核心修改区域) -->
+    <!-- 4. 系统配置 (修复：支持拖拽+批量更新) -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -378,6 +353,18 @@ const VikaDB = {
         if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
         return res.data ? res.data.records : [];
     },
+    // 🟢 批量更新通用方法 (解决频繁请求报错问题)
+    async batchUpdate(dstId, records) {
+        let url = `https://api.vika.cn/fusion/v1/datasheets/${dstId}/records`;
+        const options = { 
+            method: 'PATCH', 
+            headers: { 'Authorization': `Bearer ${VIKA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: records })
+        };
+        const res = await fetch(url, options).then(r => r.json());
+        if (!res.success) { console.error("Vika Error:", res); throw new Error(res.message); }
+        return res.data;
+    },
     async getUsers() { return (await this.request(DST_USERS)).map(r => ({ ...r.fields, id: r.recordId })); },
     async saveUser(u) {
         const fields = { username: u.username, name: u.name, role: u.role };
@@ -400,10 +387,6 @@ const VikaDB = {
         c.id ? await this.request(DST_CONFIGS, 'PATCH', fields, c.id) : await this.request(DST_CONFIGS, 'POST', fields);
     },
     async deleteConfig(id) { await this.request(DST_CONFIGS, 'DELETE', null, id); },
-    // 🟢 专门的排序更新函数
-    async updateConfigSort(id, sortIndex) {
-        await this.request(DST_CONFIGS, 'PATCH', { sort: sortIndex }, id);
-    },
     async getRecords(filter) {
         let list = (await this.request(DST_RECORDS)).map(r => ({ ...r.fields, id: r.recordId, createdAt: r.createdAt }));
         if(filter.project) list = list.filter(r => r.project === filter.project);
@@ -800,40 +783,43 @@ async function loadCfgTable() {
     const tbody = document.getElementById('cfgTbody');
     if(tbody) {
         new Sortable(tbody, {
-            handle: '.sort-handle', // 只能拖拽手柄
+            handle: '.sort-handle',
             animation: 150,
-            onEnd: function() {
-                saveOrder(); // 拖拽结束后保存顺序
-            }
+            onEnd: function() { saveOrder(); }
         });
     }
 }
 
-// 🟢 统一的保存顺序逻辑 (点击和拖拽都调用此方法)
+// 🟢 统一的保存顺序逻辑 (批量处理，防止报错)
 async function saveOrder() {
     const rows = document.querySelectorAll('#cfgTbody tr');
-    // 视觉反馈：将标题改为保存中
     const title = document.querySelector('#page-config h2');
     const oldText = title.textContent;
     title.textContent = '⚙️ 正在保存顺序...';
     title.style.color = 'var(--warning)';
 
     try {
+        const updates = [];
         for (let i = 0; i < rows.length; i++) {
             const id = rows[i].getAttribute('data-id');
-            // 按 DOM 顺序强制更新 sort 字段
-            await VikaDB.updateConfigSort(id, i);
+            updates.push({ recordId: id, fields: { sort: i } });
+        }
+        
+        // 分批发送，每次10条
+        const chunkSize = 10;
+        for (let i = 0; i < updates.length; i += chunkSize) {
+            const chunk = updates.slice(i, i + chunkSize);
+            await VikaDB.batchUpdate(DST_CONFIGS, chunk);
         }
     } catch (e) {
-        alert('保存顺序失败，请检查是否在维格表中添加了 sort 列');
+        alert('保存顺序失败：' + e.message); 
     } finally {
         title.textContent = oldText;
         title.style.color = 'var(--primary)';
-        loadCfgTable(); // 刷新表格
+        loadCfgTable();
     }
 }
 
-// 🟢 点击按钮排序 (逻辑：移动 DOM -> 调用统一保存)
 function moveCfg(id, dir) {
     const row = document.querySelector(`tr[data-id="${id}"]`);
     const tbody = document.getElementById('cfgTbody');
