@@ -768,14 +768,23 @@ function togglePhoneMask() {
     loadRecords();
 }
 
-// 🟢 获取显示用的手机号 (处理隐私)
-function getDisplayPhone(phone) {
+// 🟢 核心逻辑：手机号显示规则
+function getDisplayPhone(phone, status) {
     if (!phone) return '-';
-    // 只有 超管 且 开关打开 才显示全部
+
+    // 1. 【最高权限】只有 "超级管理员" 且 "开关打开" 时，才无视状态显示所有号码
+    // (这里的 currentUser.role === 'superadmin' 是关键，防止其他角色通过技术手段开启开关)
     if (currentUser && currentUser.role === 'superadmin' && isPhoneRevealed) {
         return phone;
     }
-    // 其他情况脱敏
+
+    // 2. 【业务需求】预约未完成（待确认）时，所有管理员/预约员都需要看号码联系客户
+    if (status === 'confirmed') {
+        return phone;
+    }
+
+    // 3. 【隐私保护】其他情况（预约成功、已取消），全部隐藏中间4位
+    // 这里的逻辑对 超级管理员(开关关) 和 普通管理员/预约员 都生效
     return String(phone).replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 }
 
@@ -824,8 +833,13 @@ async function loadRecords() {
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         if(currentUser.role !== 'operator') btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
         
-        // 🟢 处理电话显示
-        const displayPhone = getDisplayPhone(r.phone);
+        // ... 在 list.forEach 循环内部 ...
+    
+    // ⭐ 修改点：调用时传入 r.status
+    const displayPhone = getDisplayPhone(r.phone, r.status);
+
+    html += `<tr data-id="${r.id}">
+    // ... 后面的代码保持不变 ...
 
         html += `<tr data-id="${r.id}">
             <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
@@ -1154,5 +1168,6 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
 
 
