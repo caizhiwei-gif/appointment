@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.3)</title>
+    <title>画美线上预约系统 (v1.4 排序增强版)</title>
     
     <!-- 1. 引入 Excel 库 (SheetJS 官方源) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -82,6 +82,7 @@
         .btn-warning { background: var(--warning); color: white; }
         .btn-purple { background: var(--purple); color: white; }
         .btn-secondary { background: var(--bg); color: var(--text); }
+        .btn-info { background: #1890ff; color: white; }
         .btn-full { width: 100%; }
         .btn-sm { padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
         .btn-group { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
@@ -184,7 +185,7 @@
 <!-- 登录页面 -->
 <div class="login-page" id="loginPage">
     <div class="login-box">
-        <div class="login-header"><h1>🏥 画美线上预约系统</h1></p></div>
+        <div class="login-header"><h1>🏥 画美线上预约系统</h1><p>Vika 国内双向选择版</p></div>
         <form onsubmit="doLogin(event)">
             <div class="form-group"><label>用户名</label><input type="text" class="form-control" id="loginUser" placeholder="请输入用户名" required></div>
             <div class="form-group"><label>密码</label><input type="password" class="form-control" id="loginPwd" placeholder="预约人员可留空"></div>
@@ -380,14 +381,25 @@ const VikaDB = {
         u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
     },
     async deleteUser(id) { await this.request(DST_USERS, 'DELETE', null, id); },
+    // 🟢 读取配置时按 sort 字段排序
     async getConfigs() {
-        return (await this.request(DST_CONFIGS)).map(r => ({ 
+        const list = (await this.request(DST_CONFIGS)).map(r => ({ 
             ...r.fields, id: r.recordId, 
-            slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : []
+            slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : [],
+            sort: Number(r.fields.sort) || 0 // 兼容未设置的情况
         }));
+        return list.sort((a,b) => a.sort - b.sort);
     },
+    // 🟢 保存配置时包含 sort 字段
     async saveConfig(c) {
         const fields = { name: c.name, days: parseInt(c.days), capacity: parseInt(c.capacity), slots: c.slots.join(',') };
+        if(c.sort !== undefined) fields.sort = c.sort;
+        else if(!c.id) {
+            // 新项目，自动追加到最后
+            const exist = await this.getConfigs();
+            const max = exist.length ? Math.max(...exist.map(e=>e.sort)) : 0;
+            fields.sort = max + 1;
+        }
         c.id ? await this.request(DST_CONFIGS, 'PATCH', fields, c.id) : await this.request(DST_CONFIGS, 'POST', fields);
     },
     async deleteConfig(id) { await this.request(DST_CONFIGS, 'DELETE', null, id); },
@@ -827,13 +839,81 @@ async function exportExcel() {
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
     let html = `<table class="data-tbl"><thead><tr><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(c => html += `<tr><td><strong>${c.name}</strong></td><td>${c.days}</td><td>${c.capacity}</td><td>${c.slots.join(',')}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button></div></td></tr>`);
+    list.forEach((c, index) => {
+        // 🟢 增加上下移按钮
+        const first = index === 0;
+        const last = index === list.length - 1;
+        html += `<tr>
+            <td><strong>${c.name}</strong></td>
+            <td>${c.days}</td>
+            <td>${c.capacity}</td>
+            <td>${c.slots.join(',')}</td>
+            <td><div class="btn-group">
+                <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', -1)" ${first?'disabled':''}>⬆️</button>
+                <button class="btn btn-info btn-sm" onclick="moveCfg('${c.id}', 1)" ${last?'disabled':''}>⬇️</button>
+                <button class="btn btn-primary btn-sm" onclick="editCfg('${c.id}')">编辑</button>
+                <button class="btn btn-danger btn-sm" onclick="delCfg('${c.id}')">删除</button>
+            </div></td>
+        </tr>`
+    });
     document.getElementById('cfgTable').innerHTML = html + '</tbody></table>';
 }
+
+// 🟢 排序移动逻辑
+async function moveCfg(id, dir) {
+    const list = await VikaDB.getConfigs();
+    const idx = list.findIndex(c => c.id === id);
+    if(idx === -1) return;
+    const targetIdx = idx + dir;
+    if(targetIdx < 0 || targetIdx >= list.length) return;
+    
+    const curr = list[idx];
+    const target = list[targetIdx];
+    
+    // 交换 Sort 值 (如果没有 Sort 值，使用数组索引作为基准)
+    let v1 = curr.sort || idx;
+    let v2 = target.sort || targetIdx;
+    
+    // 如果值相同（比如都是0），强制错开
+    if(v1 === v2) {
+        v1 = idx;
+        v2 = targetIdx;
+    }
+    
+    // 交换保存
+    await VikaDB.saveConfig({ id: curr.id, name: curr.name, days: curr.days, capacity: curr.capacity, slots: curr.slots, sort: v2 });
+    await VikaDB.saveConfig({ id: target.id, name: target.name, days: target.days, capacity: target.capacity, slots: target.slots, sort: v1 });
+    
+    loadCfgTable();
+}
+
 async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.id === id)); }
 function openCfgModal(cfg) { document.getElementById('cfgId').value = cfg ? cfg.id : ''; document.getElementById('cfgName').value = cfg ? cfg.name : ''; document.getElementById('cfgDays').value = cfg ? cfg.days : ''; document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; document.getElementById('cfgSlots').innerHTML = ''; (cfg?cfg.slots:['09:00-10:00']).forEach(s => addSlotRow(...s.split('-'))); document.getElementById('cfgModal').classList.add('show'); }
 function addSlotRow(s, e) { const div = document.createElement('div'); div.className = 'slot-row'; div.innerHTML = `<input type="time" class="form-control" value="${s||''}" required><span>至</span><input type="time" class="form-control" value="${e||''}" required><button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`; document.getElementById('cfgSlots').appendChild(div); }
-async function saveCfg(e) { e.preventDefault(); const slots = []; document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { const i = row.querySelectorAll('input'); if(i[0].value && i[1].value) slots.push(i[0].value+'-'+i[1].value); }); await VikaDB.saveConfig({ id: document.getElementById('cfgId').value, name: document.getElementById('cfgName').value, days: parseInt(document.getElementById('cfgDays').value), capacity: parseInt(document.getElementById('cfgCap').value), slots: slots.sort() }); hideModal('cfgModal'); loadCfgTable(); }
+async function saveCfg(e) { 
+    e.preventDefault(); 
+    const slots = []; 
+    document.querySelectorAll('#cfgSlots .slot-row').forEach(row => { 
+        const i = row.querySelectorAll('input'); 
+        if(i[0].value && i[1].value) slots.push(i[0].value+'-'+i[1].value); 
+    }); 
+    const cfg = { 
+        id: document.getElementById('cfgId').value, 
+        name: document.getElementById('cfgName').value, 
+        days: parseInt(document.getElementById('cfgDays').value), 
+        capacity: parseInt(document.getElementById('cfgCap').value), 
+        slots: slots.sort() 
+    };
+    // 保持原有 sort 值
+    if(cfg.id) {
+        const exist = await VikaDB.getConfigs();
+        const old = exist.find(x=>x.id===cfg.id);
+        if(old) cfg.sort = old.sort;
+    }
+    await VikaDB.saveConfig(cfg); 
+    hideModal('cfgModal'); 
+    loadCfgTable(); 
+}
 async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.deleteConfig(id); loadCfgTable(); } }
 
 // 🟢 用户管理列表 (超管可见密码)
@@ -907,5 +987,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
-
