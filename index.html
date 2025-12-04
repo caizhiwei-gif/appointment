@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.7 优化版)</title>
+    <title>画美线上预约系统 (v1.8 日期排期版)</title>
     
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -165,15 +165,23 @@
         .ur-admin { background: #fff7e6; color: #fa8c16; }
         .ur-op { background: #e6fffb; color: #13c2c2; }
         
-        /* 优化时段选择 UI */
-        .slot-config-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+        /* 优化时段/日期选择 UI */
+        .slot-config-list { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
         .slot-cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); }
         .slot-cfg-item:last-child { border-bottom: none; }
         .slot-cfg-item:hover { background: var(--bg); }
-        .slot-cfg-label { font-weight: 600; font-size: 0.9rem; color: var(--primary); width: 120px; }
+        .slot-cfg-label { font-weight: 600; font-size: 0.9rem; color: var(--primary); min-width: 110px; }
         .slot-cfg-opts { display: flex; gap: 15px; }
         .slot-radio { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
         .slot-radio input { accent-color: var(--primary); }
+
+        /* 日期复选框样式 */
+        .date-cfg-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+        .date-cfg-item:hover { background: var(--bg); }
+        .date-cfg-item input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+        .date-cfg-text { font-size: 0.9rem; flex: 1; cursor: pointer; }
+        .date-cfg-wd { font-size: 0.8rem; color: var(--text2); margin-left: 5px; }
+        .date-cfg-wd.weekend { color: var(--danger); font-weight: bold; }
 
         .empty-box { text-align: center; padding: 40px 15px; color: var(--text2); }
         .empty-box h3 { color: var(--text); margin-bottom: 6px; font-size: 1rem; }
@@ -307,7 +315,7 @@
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
-                <div class="card-header"><h2>⚙️ 项目配置管理</h2><p>可拖拽调整顺序，或使用上下箭头</p></div>
+                <div class="card-header"><h2>⚙️ 项目配置管理</h2><p>请确保维格表中 'days' (可约天数) 列类型为 <b>单行文本</b></p></div>
                 <div class="tip-box">💡 提示：鼠标按住表格行可直接拖动排序。操作后请耐心等待“保存完毕”提示。</div>
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openCfgModal()">➕ 添加项目</button>
@@ -352,12 +360,21 @@
 <form id="cfgForm" onsubmit="saveCfg(event)">
     <input type="hidden" id="cfgId">
     <div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div>
-    <div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required><div class="form-hint">规则：从明天起算，共多少天 (例如设为10，即开放明天起共10天)</div></div>
+    
+    <!-- 🟢 优化：日期选择列表 -->
+    <div class="form-group"><label>可约日期 (未来30天) <span class="required">*</span></label>
+        <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">📅 默认全选，取消勾选即可在特定日期（如周末）不放号</div>
+        <div id="cfgDateList" class="slot-config-list"></div>
+    </div>
+    
     <div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div>
+    
+    <!-- 🟢 优化：时段选择列表 -->
     <div class="form-group"><label>可预约时段 (09:00 - 20:00) <span class="required">*</span></label>
         <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">✅ 请在下方勾选开放的时段，未勾选即为排除</div>
         <div id="cfgSlots" class="slot-config-list"></div>
     </div>
+    
     <div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('cfgModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div>
 </form>
 </div></div>
@@ -427,16 +444,19 @@ const VikaDB = {
         u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
     },
     async deleteUser(id) { await this.request(DST_USERS, 'DELETE', null, id); },
+    // 🟢 修改点：配置读取，days 现在是字符串日期列表
     async getConfigs() {
         const list = (await this.request(DST_CONFIGS)).map(r => ({ 
             ...r.fields, id: r.recordId, 
             slots: r.fields.slots ? String(r.fields.slots).split(/[,，]/).map(s=>s.trim()).filter(s=>s) : [],
+            days: r.fields.days ? String(r.fields.days) : '', // 强制转为 String，防止旧数据是 Number 报错
             sort: (r.fields.sort === undefined || r.fields.sort === null) ? 999 : Number(r.fields.sort)
         }));
         return list.sort((a,b) => a.sort - b.sort);
     },
+    // 🟢 修改点：保存 days 为字符串 (逗号分隔的日期)
     async saveConfig(c) {
-        const fields = { name: c.name, days: parseInt(c.days), capacity: parseInt(c.capacity), slots: c.slots.join(',') };
+        const fields = { name: c.name, days: c.days, capacity: parseInt(c.capacity), slots: c.slots.join(',') };
         if(c.sort !== undefined) fields.sort = c.sort;
         c.id ? await this.request(DST_CONFIGS, 'PATCH', fields, c.id) : await this.request(DST_CONFIGS, 'POST', fields);
     },
@@ -471,15 +491,28 @@ const VikaDB = {
         if(!cfg) return {ok:false, msg:'项目不存在'};
         return { ok: (cfg.capacity - count) > 0, msg: '已满' };
     },
-    // 🟢 修复日期规则：不可以约当天。从 i=1 (明天) 开始
+    // 🟢 修改点：获取可用日期不再通过 loop i=1 to N 计算，而是直接读取配置中的日期列表，并过滤掉已过去的日期
     async getAvailDates(cfg) {
-        const dates = []; const today = new Date();
-        for(let i=1; i<=cfg.days; i++) { // i=1 表示明天开始，包含第days天
-            const d = new Date(today); 
-            d.setDate(today.getDate()+i); 
-            dates.push(d.toISOString().split('T')[0]); 
+        const todayStr = new Date(new Date().setHours(0,0,0,0));
+        let dates = [];
+        
+        // 兼容旧数据：如果是纯数字 (例如 "7")，则按旧逻辑生成
+        if (cfg.days && !cfg.days.includes('-') && !isNaN(cfg.days)) {
+             const limit = parseInt(cfg.days);
+             const now = new Date();
+             for(let i=1; i<=limit; i++) {
+                 const d = new Date(now); d.setDate(now.getDate()+i);
+                 dates.push(d.toISOString().split('T')[0]);
+             }
+        } else {
+            // 新逻辑：逗号分隔的日期字符串
+            const allDates = cfg.days ? cfg.days.split(',') : [];
+            // 过滤：只保留大于等于今天的（这里取明天开始，因为规则是不约当天）
+            // 如果要包含今天，把 getTime() 比较改成 >= todayStr.getTime()
+            // 现在的需求是“不可以约当天的”，所以取 > todayStr
+            dates = allDates.filter(d => new Date(d).getTime() > todayStr.getTime());
         }
-        return dates;
+        return dates.sort();
     },
     getWeekday(s) { return ['日','一','二','三','四','五','六'][new Date(s).getDay()]; }
 };
@@ -596,6 +629,10 @@ async function renderDates(filterSlot) {
     const cfg = bookState.cfg;
     const dates = await VikaDB.getAvailDates(cfg);
     let html = '';
+    if(dates.length === 0) {
+        document.getElementById('dateGrid').innerHTML = '<div class="tip-box" style="grid-column:1/-1;">暂无可用日期，请联系管理员配置</div>';
+        return;
+    }
     dates.forEach(dt => {
         let avail = 0;
         if (filterSlot) avail = cfg.capacity - VikaDB.countBookedLocal(bookState.project, dt, filterSlot);
@@ -830,17 +867,20 @@ async function exportExcel() {
     XLSX.utils.book_append_sheet(wb, ws, '预约记录'); XLSX.writeFile(wb, '预约数据.xlsx');
 }
 
-// ==================== 🟢 增强的项目配置管理 (新时段规则) ====================
+// ==================== 🟢 增强的项目配置管理 ====================
 async function loadCfgTable() {
     const list = await VikaDB.getConfigs();
-    let html = `<table class="data-tbl"><thead><tr><th>排序</th><th>项目</th><th>天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody id="cfgTbody">`;
+    let html = `<table class="data-tbl"><thead><tr><th>排序</th><th>项目</th><th>可约天数</th><th>容量</th><th>时段</th><th>操作</th></tr></thead><tbody id="cfgTbody">`;
     list.forEach((c, index) => {
         const first = index === 0;
         const last = index === list.length - 1;
+        // 🟢 显示天数摘要
+        const daysCount = (c.days && !c.days.includes('-') && !isNaN(c.days)) ? `${c.days}天 (旧版)` : (c.days ? c.days.split(',').length + '天' : '无');
+        
         html += `<tr class="draggable-row" data-id="${c.id}">
             <td><span class="sort-handle">☰</span></td>
             <td><strong>${c.name}</strong></td>
-            <td>${c.days}</td>
+            <td>${daysCount}</td>
             <td>${c.capacity}</td>
             <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.slots.join(',')}">${c.slots.join(', ')}</td>
             <td><div class="btn-group">
@@ -905,18 +945,51 @@ function moveCfg(id, dir) {
 
 async function editCfg(id) { const cfgs = await VikaDB.getConfigs(); openCfgModal(cfgs.find(c => c.id === id)); }
 
-// 🟢 修改点：打开配置模态框，渲染 09:00-20:00 的互斥选项列表
+// 🟢 修改点：打开配置模态框，渲染日期列表和时段列表
 function openCfgModal(cfg) { 
     document.getElementById('cfgId').value = cfg ? cfg.id : ''; 
     document.getElementById('cfgName').value = cfg ? cfg.name : ''; 
-    document.getElementById('cfgDays').value = cfg ? cfg.days : ''; 
+    // document.getElementById('cfgDays').value = cfg ? cfg.days : ''; // 旧版输入框移除
     document.getElementById('cfgCap').value = cfg ? cfg.capacity : ''; 
     
-    const container = document.getElementById('cfgSlots');
-    container.innerHTML = '';
+    // 1. 渲染日期列表 (未来30天)
+    const dateContainer = document.getElementById('cfgDateList');
+    dateContainer.innerHTML = '';
+    const today = new Date();
+    const existingDates = (cfg && cfg.days) ? String(cfg.days).split(',') : [];
+    // 兼容逻辑：如果是旧版数字配置，不自动勾选，建议用户重新选
+    const isLegacy = cfg && !String(cfg.days).includes('-') && !isNaN(cfg.days);
+
+    for(let i=1; i<=30; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const dayIdx = d.getDay();
+        const week = ['日','一','二','三','四','五','六'][dayIdx];
+        const isWeekend = (dayIdx === 0 || dayIdx === 6);
+        
+        // 选中逻辑：
+        // - 如果是新建 (no cfg)，默认全选
+        // - 如果是旧版数字，暂时不选中，让用户自己点 (防止误解)
+        // - 如果是新版列表，判断是否在列表中
+        let isChecked = false;
+        if (!cfg) isChecked = true;
+        else if (isLegacy) isChecked = false; // 旧数据不做自动转换，太复杂
+        else isChecked = existingDates.includes(dateStr);
+
+        const div = document.createElement('label');
+        div.className = 'date-cfg-item';
+        div.innerHTML = `
+            <input type="checkbox" name="cfgDate" value="${dateStr}" ${isChecked ? 'checked' : ''}>
+            <span class="date-cfg-text">${dateStr.slice(5)} <span class="date-cfg-wd ${isWeekend?'weekend':''}">(周${week})</span></span>
+        `;
+        dateContainer.appendChild(div);
+    }
+
+    // 2. 渲染时段列表 (09:00 - 20:00)
+    const slotContainer = document.getElementById('cfgSlots');
+    slotContainer.innerHTML = '';
     const currentSlots = cfg ? cfg.slots : [];
-    
-    // 生成 09:00 到 20:00 的时段
     const startHour = 9;
     const endHour = 20;
     
@@ -924,8 +997,6 @@ function openCfgModal(cfg) {
         const timeStr = `${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`;
         const isSelected = currentSlots.includes(timeStr);
         
-        // 创建 HTML 结构：时段名 + [可约] Radio + [排除] Radio
-        // 利用 radio 的 name 属性实现互斥
         const div = document.createElement('div');
         div.className = 'slot-cfg-item';
         div.innerHTML = `
@@ -941,22 +1012,26 @@ function openCfgModal(cfg) {
                 </label>
             </div>
         `;
-        container.appendChild(div);
+        slotContainer.appendChild(div);
     }
 
     document.getElementById('cfgModal').classList.add('show'); 
 }
 
-// 🟢 修改点：保存配置时收集 Radio 的值
+// 🟢 修改点：保存配置时收集 Date Checkbox 和 Slot Radio 的值
 async function saveCfg(e) { 
     e.preventDefault(); 
+    
+    // 收集日期
+    const dateCbs = document.querySelectorAll('input[name="cfgDate"]:checked');
+    const selectedDates = Array.from(dateCbs).map(cb => cb.value).join(',');
+    
+    // 收集时段
     const slots = []; 
-    // 遍历所有可能的时段 Radio
     const startHour = 9; 
     const endHour = 20;
     for (let i = startHour; i < endHour; i++) {
         const radios = document.getElementsByName(`slot_${i}`);
-        // 检查哪个 radio 被选中
         for(let r of radios) {
             if(r.checked && r.value === '1') {
                 slots.push(`${String(i).padStart(2,'0')}:00-${String(i+1).padStart(2,'0')}:00`);
@@ -967,10 +1042,16 @@ async function saveCfg(e) {
     const cfg = { 
         id: document.getElementById('cfgId').value, 
         name: document.getElementById('cfgName').value, 
-        days: parseInt(document.getElementById('cfgDays').value), 
+        days: selectedDates, // 保存为字符串
         capacity: parseInt(document.getElementById('cfgCap').value), 
         slots: slots.sort() 
     };
+    
+    // 简单验证
+    if(!selectedDates) {
+        if(!confirm('未选择任何可约日期，确定保存吗？（这将导致无法预约）')) return;
+    }
+
     await VikaDB.saveConfig(cfg); 
     hideModal('cfgModal'); loadCfgTable(); 
 }
