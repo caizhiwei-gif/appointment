@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.9 隐私保护版)</title>
+    <title>画美线上预约系统 (v1.9 完整版)</title>
     
+    <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <!-- 2. 引入 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <style>
-        /* ================= 样式部分 (保持不变) ================= */
+        /* ================= 样式部分 ================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root { --primary: #4a90d9; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f; --purple: #722ed1; --text: #333; --text2: #666; --border: #e8e8e8; --bg: #f5f7fa; --shadow: 0 2px 12px rgba(0,0,0,0.1); }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--text); }
@@ -57,16 +59,20 @@
         .form-hint.error { color: var(--danger); }
         .form-hint.success { color: var(--success); }
         textarea.form-control { min-height: 70px; resize: vertical; }
+        
         .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; margin-top: 8px; }
         .sel-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .sel-item { padding: 10px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.3s; background: white; font-size: 0.9rem; }
         .sel-item:hover:not(.disabled) { border-color: var(--primary); background: rgba(74,144,217,0.05); }
+        
         .sel-item.selected, .sel-item.selected:hover { border-color: var(--primary) !important; background: var(--primary) !important; color: white !important; }
         .sel-item.selected * { color: rgba(255,255,255,0.95) !important; }
         .sel-item.disabled { background: var(--bg); color: #ccc; cursor: not-allowed; }
+        
         .date-day { font-size: 1.1rem; font-weight: bold; }
         .date-wd { font-size: 0.7rem; color: var(--text2); margin-top: 3px; }
         .slot-left { font-size: 0.7rem; color: var(--success); margin-top: 3px; }
+        
         .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .btn-primary { background: linear-gradient(135deg, var(--primary), #667eea); color: white; }
         .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74,144,217,0.4); }
@@ -106,10 +112,12 @@
         .data-tbl th { background: var(--bg); font-weight: 600; white-space: nowrap; }
         .data-tbl tr:hover { background: rgba(74,144,217,0.03); }
         .data-tbl td:last-child { white-space: nowrap; min-width: 220px; width: 1%; }
+        
         .draggable-row { cursor: move; }
         .draggable-row:active { background: #f0f5ff; }
         .sort-handle { cursor: grab; color: #999; font-size: 1.2rem; padding: 0 5px; }
         .sort-handle:hover { color: var(--primary); }
+        
         .slot-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
         .slot-tbl th, .slot-tbl td { padding: 6px; border-bottom: 1px solid var(--border); }
         .slot-tbl th { background: var(--bg); }
@@ -156,6 +164,8 @@
         .ur-super { background: #f9f0ff; color: #722ed1; }
         .ur-admin { background: #fff7e6; color: #fa8c16; }
         .ur-op { background: #e6fffb; color: #13c2c2; }
+        
+        /* 优化时段选择 UI */
         .slot-config-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
         .slot-cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); }
         .slot-cfg-item:last-child { border-bottom: none; }
@@ -164,23 +174,31 @@
         .slot-cfg-opts { display: flex; gap: 15px; }
         .slot-radio { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; cursor: pointer; }
         .slot-radio input { accent-color: var(--primary); }
+
         .empty-box { text-align: center; padding: 40px 15px; color: var(--text2); }
         .empty-box h3 { color: var(--text); margin-bottom: 6px; font-size: 1rem; }
         .tip-box { background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 0.85rem; color: #1890ff; }
         .page { display: none; }
         .page.active { display: block; }
         .perm-hide { display: none !important; }
+        
+        /* 复制相关样式 */
         .copy-cell { cursor: pointer; position: relative; transition: color 0.2s; }
         .copy-cell:hover { color: var(--primary); background: rgba(74,144,217,0.05); }
         .copy-cell:active { transform: scale(0.98); }
         .copy-cell::after { content: '点击复制'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity 0.2s; white-space: nowrap; }
         .copy-cell:hover::after { opacity: 0.8; }
+        
+        /* Toast 提示 */
         .toast-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: white; padding: 12px 24px; border-radius: 8px; font-size: 0.95rem; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .toast-box.show { opacity: 1; }
+
+        /* 新增：排除日期标签样式 */
         .tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; min-height: 30px; }
         .exclude-tag { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
         .exclude-tag span { cursor: pointer; font-weight: bold; padding: 0 4px; }
         .exclude-tag span:hover { background: rgba(255,0,0,0.1); border-radius: 50%; }
+
         @media (max-width: 768px) {
             .navbar { padding: 12px; }
             .navbar h1 { font-size: 1.1rem; }
@@ -231,7 +249,7 @@
         </div>
     </nav>
 
-    <!-- 1. 预约挂号 -->
+    <!-- 1. 预约挂号 (预约人非必填) -->
     <div id="page-booking" class="page active">
         <div class="container">
             <div class="card" id="formCard">
@@ -243,7 +261,10 @@
                     <div class="form-group" id="modeGroup" style="display:none;"><label>选择方式</label><div class="sel-grid sel-grid-2"><div class="sel-item" onclick="pickMode('date')">📅 先选日期</div><div class="sel-item" onclick="pickMode('time')">🕐 先选时段</div></div></div>
                     <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
                     <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
+                    
+                    <!-- 修改：去掉了必填星号和 required 属性 -->
                     <div class="form-group"><label>预约人</label><input type="text" class="form-control" id="inpOperator"></div>
+                    
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
                     <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
                 </form>
@@ -296,7 +317,7 @@
         </div>
     </div>
 
-    <!-- 4. 系统配置 -->
+    <!-- 4. 系统配置 (修复：支持拖拽+批量更新+新规则+黑名单) -->
     <div id="page-config" class="page">
         <div class="container-wide">
             <div class="card">
@@ -348,6 +369,8 @@
             <input type="hidden" id="cfgId">
             <div class="form-group"><label>项目名称 <span class="required">*</span></label><input type="text" class="form-control" id="cfgName" required></div>
             <div class="form-group"><label>可预约天数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgDays" min="1" max="90" required><div class="form-hint">规则：从明天起算，共多少天 (例如设为10，即开放明天起共10天)</div></div>
+            
+            <!-- 新增：排除特定日期 -->
             <div class="form-group" style="background: #fffbe6; padding: 10px; border-radius: 8px; border:1px solid #ffe58f;">
                 <label style="color:#faad14;">⛔ 排除特定日期 (特殊情况不放号)</label>
                 <div style="display:flex; gap:8px; margin-bottom:8px;">
@@ -357,6 +380,7 @@
                 <div id="cfgExcludeList" class="tag-container"></div>
                 <div class="form-hint">在此列表中的日期，即使用户在“可预约天数”范围内也无法预约。</div>
             </div>
+
             <div class="form-group"><label>每时段人数 <span class="required">*</span></label><input type="number" class="form-control" id="cfgCap" min="1" max="100" required></div>
             <div class="form-group"><label>可预约时段 (09:00 - 20:00) <span class="required">*</span></label>
                 <div class="tip-box" style="padding:6px 12px;margin-bottom:8px;">✅ 请在下方勾选开放的时段，未勾选即为排除</div>
@@ -462,11 +486,11 @@ const VikaDB = {
         return list.sort((a,b) => b.createdAt - a.createdAt);
     },
     async addRecord(r) {
-    // ⭐ 修改点：这里改成 currentUser.name，这样保存的就是姓名了
-    const fields = { ...r, status: 'confirmed', createdBy: currentUser.name };
-    const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
-    return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
-},
+        // ⭐ 修改：保存的是姓名 (currentUser.name)
+        const fields = { ...r, status: 'confirmed', createdBy: currentUser.name };
+        const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
+        return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
+    },
     async updateRecordStatus(id, status) { await this.request(DST_RECORDS, 'PATCH', { status: status }, id); },
     async updateRecordRemark(id, remark) { await this.request(DST_RECORDS, 'PATCH', { remark: remark }, id); },
     async deleteRecord(id) { await this.request(DST_RECORDS, 'DELETE', null, id); },
@@ -669,9 +693,8 @@ function checkSubmit() {
     document.getElementById('inpPhone').className = 'form-control ' + (phone ? (ps.valid?'valid':'invalid') : '');
     document.getElementById('phoneHint').textContent = ps.msg;
     
-    // ⭐ 修改点：只检查 姓名、电话、项目、日期、时段，不再检查预约人
+    // ⭐ 修改：不再校验 inpOperator
     const canSubmit = name.length>=2 && ps.valid && bookState.project && bookState.date && bookState.slot;
-    
     document.getElementById('btnSubmit').disabled = !canSubmit;
 }
 
@@ -768,23 +791,18 @@ function togglePhoneMask() {
     loadRecords();
 }
 
-// 🟢 核心逻辑：手机号显示规则
+// 🟢 获取显示用的手机号 (处理隐私)
 function getDisplayPhone(phone, status) {
     if (!phone) return '-';
-
-    // 1. 【最高权限】只有 "超级管理员" 且 "开关打开" 时，才无视状态显示所有号码
-    // (这里的 currentUser.role === 'superadmin' 是关键，防止其他角色通过技术手段开启开关)
+    // 1. 最高权限：只有 "超级管理员" 且 "开关打开" 时，才无视状态显示所有号码
     if (currentUser && currentUser.role === 'superadmin' && isPhoneRevealed) {
         return phone;
     }
-
-    // 2. 【业务需求】预约未完成（待确认）时，所有管理员/预约员都需要看号码联系客户
+    // 2. 业务需求：预约未完成（待确认）时，所有管理员/预约员都需要看号码联系客户
     if (status === 'confirmed') {
         return phone;
     }
-
-    // 3. 【隐私保护】其他情况（预约成功、已取消），全部隐藏中间4位
-    // 这里的逻辑对 超级管理员(开关关) 和 普通管理员/预约员 都生效
+    // 3. 隐私保护：其他情况（预约成功、已取消），全部隐藏中间4位
     return String(phone).replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 }
 
@@ -833,13 +851,8 @@ async function loadRecords() {
         let btns = `<button class="btn btn-warning btn-sm" onclick="cancelRec('${r.id}')">取消</button>`;
         if(currentUser.role !== 'operator') btns = `<button class="btn btn-success btn-sm" onclick="confirmRec('${r.id}')">确认</button>` + btns + `<button class="btn btn-danger btn-sm" onclick="deleteRec('${r.id}')">删除</button>`;
         
-        // ... 在 list.forEach 循环内部 ...
-    
-    // ⭐ 修改点：调用时传入 r.status
-    const displayPhone = getDisplayPhone(r.phone, r.status);
-
-    html += `<tr data-id="${r.id}">
-    // ... 后面的代码保持不变 ...
+        // 🟢 处理电话显示
+        const displayPhone = getDisplayPhone(r.phone, r.status);
 
         html += `<tr data-id="${r.id}">
             <td class="checkbox-col"><input type="checkbox" class="row-cb" value="${r.id}"></td>
@@ -851,9 +864,9 @@ async function loadRecords() {
             <td class="copy-cell" onclick="if(event.target.tagName!=='INPUT') copyText('${r.remark||'-'}')">
                 <input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无">
             </td>
-            <!-- ⭐ 修改点：增加了 class="copy-cell" 和 onclick="copyText(...)" -->
-<td class="copy-cell" onclick="copyText('${r.createdBy||'-'}')">${r.createdBy||'-'}</td>
-<td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
+            <!-- 🟢 修改：创建人支持复制 -->
+            <td class="copy-cell" onclick="copyText('${r.createdBy||'-'}')">${r.createdBy||'-'}</td>
+            <td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
             <td><div class="btn-group">${btns}</div></td>
         </tr>`;
     });
@@ -1168,6 +1181,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
-
-
