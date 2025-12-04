@@ -1069,10 +1069,104 @@ function initShare() { const base = location.href.split('?')[0]; document.getEle
 function copyLink(id) { document.getElementById(id).select(); document.execCommand('copy'); alert('已复制'); }
 function downloadConfigTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '项目名称': '示例项目', '可约天数': 7, '时段容量': 5, '时段列表': '09:00-10:00, 10:00-11:00' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '项目模板'); XLSX.writeFile(wb, '项目配置导入模板.xlsx'); }
 function downloadUserTemplate() { if(typeof XLSX === 'undefined') return alert('组件加载中'); const data = [{ '用户名': 'test', '姓名': '测试', '密码': '123', '角色': '预约人员' }]; const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '用户模板'); XLSX.writeFile(wb, '用户导入模板.xlsx'); }
-function importConfigs(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async function(ev) { try { const wb = XLSX.read(ev.target.result, { type: 'array' }); const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); let count = 0; for (let row of data) { const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s); await VikaDB.saveConfig({ name: row['项目名称'], days: row['可约天数'], capacity: row['时段容量'], slots: slots, excludedDates: [] }); count++; } alert(`已导入 ${count} 个配置`); loadCfgTable(); } catch (err) { alert('导入失败：' + err.message); } }; reader.readAsArrayBuffer(file); e.target.value = ''; }
-function importUsers(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async function(ev) { try { const wb = XLSX.read(ev.target.result, { type: 'array' }); const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); let count = 0; for (let row of data) { const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' }; const roleCode = roleMap[row['角色']] || 'operator'; await VikaDB.saveUser({ username: row['用户名'], name: row['姓名'], password: String(row['密码']), role: roleCode }); count++; } alert(`已导入 ${count} 个用户`); loadUserTable(); } catch (err) { alert('导入失败：' + err.message); } }; reader.readAsArrayBuffer(file); e.target.value = ''; }
+// 🟢 修复版：导入用户 (增加延时，防止触发 QPS 限制)
+function importUsers(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    
+    const reader = new FileReader(); 
+    reader.onload = async function(ev) { 
+        try { 
+            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+            
+            let count = 0; 
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileUserImport\').click()"]');
+            const orgText = btn.textContent;
+            btn.textContent = '导入中...';
+            btn.disabled = true;
+
+            for (let row of data) { 
+                const roleMap = { '超级管理员': 'superadmin', '管理员': 'admin', '预约人员': 'operator' }; 
+                const roleCode = roleMap[row['角色']] || 'operator'; 
+                
+                await VikaDB.saveUser({ 
+                    username: row['用户名'], 
+                    name: row['姓名'], 
+                    password: String(row['密码']), 
+                    role: roleCode 
+                }); 
+                count++; 
+                
+                // ⭐ 关键修改：每处理一行，暂停 600 毫秒 (0.6秒)
+                // 2 QPS 意味着 1秒2次，即间隔至少500ms，设为600ms比较保险
+                await new Promise(r => setTimeout(r, 600));
+            } 
+            alert(`✅ 已成功导入 ${count} 个用户`); 
+            loadUserTable(); 
+            btn.textContent = orgText;
+            btn.disabled = false;
+        } catch (err) { 
+            alert('❌ 导入中断：' + err.message); 
+            // 即使报错也刷新一下表格，显示已经导入成功的部分
+            loadUserTable();
+            // 恢复按钮状态
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileUserImport\').click()"]');
+            if(btn) { btn.textContent = '📤 导入用户'; btn.disabled = false; }
+        } 
+    }; 
+    reader.readAsArrayBuffer(file); 
+    e.target.value = ''; 
+}
+// 🟢 修复版：导入配置 (增加延时，防止触发 QPS 限制)
+function importConfigs(e) { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    
+    const reader = new FileReader(); 
+    reader.onload = async function(ev) { 
+        try { 
+            const wb = XLSX.read(ev.target.result, { type: 'array' }); 
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); 
+            
+            let count = 0; 
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            const orgText = btn.textContent;
+            btn.textContent = '导入中...';
+            btn.disabled = true;
+
+            for (let row of data) { 
+                const slots = (row['时段列表']||'').split(/[,，]/).map(s=>s.trim()).filter(s=>s); 
+                
+                await VikaDB.saveConfig({ 
+                    name: row['项目名称'], 
+                    days: row['可约天数'], 
+                    capacity: row['时段容量'], 
+                    slots: slots,
+                    excludedDates: [] // 默认导入时不设置排除日期
+                }); 
+                count++; 
+
+                // ⭐ 关键修改：每处理一行，暂停 600 毫秒
+                await new Promise(r => setTimeout(r, 600));
+            } 
+            alert(`✅ 已成功导入 ${count} 个配置`); 
+            loadCfgTable(); 
+            btn.textContent = orgText;
+            btn.disabled = false;
+        } catch (err) { 
+            alert('❌ 导入中断：' + err.message); 
+            loadCfgTable();
+            const btn = document.querySelector('button[onclick="document.getElementById(\'fileConfigImport\').click()"]');
+            if(btn) { btn.textContent = '📤 导入项目配置'; btn.disabled = false; }
+        } 
+    }; 
+    reader.readAsArrayBuffer(file); 
+    e.target.value = ''; 
+}
 
 document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
