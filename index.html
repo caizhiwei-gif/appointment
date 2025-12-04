@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.2 增强版)</title>
+    <title>画美线上预约系统 (v1.3 统计增强版)</title>
     
     <!-- 1. 引入 Excel 库 (SheetJS 官方源) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -481,7 +481,7 @@ async function doChangePwd(e) {
     const newP = document.getElementById('pwdNew').value;
     const btn = e.target.querySelector('button[type=submit]');
     
-    // 简单校验原密码（如果是operator且没密码的情况特殊处理，但这里假设已登录且有密码机制）
+    // 简单校验原密码
     if(currentUser.password && currentUser.password !== oldP) { alert('原密码错误'); return; }
     
     btn.disabled = true; btn.textContent = '修改中...';
@@ -728,7 +728,21 @@ async function loadRecords() {
     });
     if (currentUser.role === 'operator') list = list.filter(r => r.createdBy === currentUser.username);
     
-    document.getElementById('recOverview').innerHTML = `<div class="overview-card"><div class="overview-val">${list.length}</div><div class="overview-lbl">总记录</div></div>`;
+    // 🟢 恢复统计数量逻辑
+    const stats = {
+        total: list.length,
+        pending: list.filter(r => r.status === 'confirmed').length, // 'confirmed' 在 STATUS_MAP 对应 '待确认'
+        success: list.filter(r => r.status === 'success').length,
+        cancelled: list.filter(r => r.status === 'cancelled').length
+    };
+
+    document.getElementById('recOverview').innerHTML = `
+        <div class="overview-card"><div class="overview-val">${stats.total}</div><div class="overview-lbl">总记录</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:#1890ff">${stats.pending}</div><div class="overview-lbl">待确认</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--success)">${stats.success}</div><div class="overview-lbl">预约成功</div></div>
+        <div class="overview-card"><div class="overview-val" style="color:var(--text2)">${stats.cancelled}</div><div class="overview-lbl">已取消</div></div>
+    `;
+
     document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
