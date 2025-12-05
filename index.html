@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v1.9 完整版)</title>
+    <title>画美线上预约系统 (v2.0 部门版)</title>
     
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -249,7 +249,7 @@
         </div>
     </nav>
 
-    <!-- 1. 预约挂号 (预约人非必填) -->
+    <!-- 1. 预约挂号 (已移除预约人输入框) -->
     <div id="page-booking" class="page active">
         <div class="container">
             <div class="card" id="formCard">
@@ -262,8 +262,7 @@
                     <div class="form-group" id="dateGroup" style="display:none;"><label>预约日期 <span class="required">*</span></label><div class="sel-grid" id="dateGrid"></div></div>
                     <div class="form-group" id="timeGroup" style="display:none;"><label>预约时段 <span class="required">*</span></label><div class="sel-grid" id="timeGrid"></div></div>
                     
-                    <!-- 修改：去掉了必填星号和 required 属性 -->
-                    <div class="form-group"><label>预约人</label><input type="text" class="form-control" id="inpOperator"></div>
+                    <!-- 🟢 已移除：预约人输入框 -->
                     
                     <div class="form-group"><label>备注</label><textarea class="form-control" id="inpRemark"></textarea></div>
                     <button type="submit" class="btn btn-primary btn-full" id="btnSubmit" disabled>确认预约</button>
@@ -334,11 +333,17 @@
         </div>
     </div>
     
-    <!-- 5. 用户管理 -->
+    <!-- 5. 用户管理 (升级：搜索+部门+唯一性校验) -->
     <div id="page-users" class="page">
         <div class="container-wide">
             <div class="card">
                 <div class="card-header"><h2>👥 用户管理</h2><p>管理系统用户</p></div>
+                
+                <!-- 🟢 新增：用户搜索栏 -->
+                <div class="filter-bar" style="box-shadow:none; padding:0; margin-bottom:15px; background:none;">
+                     <div class="filter-item"><label>🔍 搜索用户 (姓名/用户名/部门)</label><input type="text" class="form-control" id="userSearch" placeholder="输入关键字..." oninput="loadUserTable()"></div>
+                </div>
+
                 <div class="btn-group" style="margin-bottom:18px;">
                     <button class="btn btn-success" onclick="openUserModal()">➕ 添加用户</button>
                     <button type="button" class="btn btn-purple" onclick="downloadUserTemplate()">📥 下载用户模板</button>
@@ -391,7 +396,25 @@
     </div>
 </div>
 
-<div class="modal-mask" id="userModal"><div class="modal-box"><div class="modal-head"><h3 id="userModalTitle">添加用户</h3><button class="modal-close" onclick="hideModal('userModal')">✕</button></div><form id="userForm" onsubmit="saveUser(event)"><input type="hidden" id="userId"><div class="form-group"><label>用户名 <span class="required">*</span></label><input type="text" class="form-control" id="userUsername" required></div><div class="form-group"><label>姓名 <span class="required">*</span></label><input type="text" class="form-control" id="userName" required></div><div class="form-group"><label>密码</label><input type="password" class="form-control" id="userPwd"></div><div class="form-group"><label>角色 <span class="required">*</span></label><select class="form-control" id="userRole" required><option value="operator">预约人员</option><option value="admin">管理员</option><option value="superadmin">超级管理员</option></select></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('userModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div></form></div></div>
+<!-- 用户模态框：新增部门字段 -->
+<div class="modal-mask" id="userModal">
+    <div class="modal-box">
+        <div class="modal-head"><h3 id="userModalTitle">添加用户</h3><button class="modal-close" onclick="hideModal('userModal')">✕</button></div>
+        <form id="userForm" onsubmit="saveUser(event)">
+            <input type="hidden" id="userId">
+            <div class="form-group"><label>用户名 (登录账号) <span class="required">*</span></label><input type="text" class="form-control" id="userUsername" required><div class="form-hint">必须唯一，不可重复</div></div>
+            <div class="form-group"><label>姓名 (显示名称) <span class="required">*</span></label><input type="text" class="form-control" id="userName" required></div>
+            
+            <!-- 🟢 新增：部门字段 -->
+            <div class="form-group"><label>部门</label><input type="text" class="form-control" id="userDept" placeholder="例如：咨询部、前台"></div>
+            
+            <div class="form-group"><label>密码</label><input type="password" class="form-control" id="userPwd"></div>
+            <div class="form-group"><label>角色 <span class="required">*</span></label><select class="form-control" id="userRole" required><option value="operator">预约人员</option><option value="admin">管理员</option><option value="superadmin">超级管理员</option></select></div>
+            <div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('userModal')">取消</button><button type="submit" class="btn btn-success">保存</button></div>
+        </form>
+    </div>
+</div>
+
 <div class="modal-mask" id="superPwdModal"><div class="modal-box" style="max-width:360px;"><div class="modal-head"><h3>🔐 超管验证</h3><button class="modal-close" onclick="hideModal('superPwdModal')">✕</button></div><form onsubmit="verifySuperPwd(event)"><div class="form-group"><label>请输入超级管理员密码</label><input type="password" class="form-control" id="superPwdInput" required></div><div class="modal-foot" style="border:none;padding-top:0;"><button type="button" class="btn btn-secondary" onclick="hideModal('superPwdModal')">取消</button><button type="submit" class="btn btn-purple">确认</button></div></form></div></div>
 <div class="modal-mask" id="pwdModal"><div class="modal-box" style="max-width:400px;"><div class="modal-head"><h3>🔐 修改密码</h3><button class="modal-close" onclick="hideModal('pwdModal')">✕</button></div><form onsubmit="doChangePwd(event)"><div class="form-group"><label>原密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdOld" required></div><div class="form-group"><label>新密码 <span class="required">*</span></label><input type="password" class="form-control" id="pwdNew" minlength="4" required></div><div class="modal-foot"><button type="button" class="btn btn-secondary" onclick="hideModal('pwdModal')">取消</button><button type="submit" class="btn btn-success">确认修改</button></div></form></div></div>
 
@@ -448,8 +471,10 @@ const VikaDB = {
         return res.data;
     },
     async getUsers() { return (await this.request(DST_USERS)).map(r => ({ ...r.fields, id: r.recordId })); },
+    
+    // 🟢 修改：保存用户时带上部门信息
     async saveUser(u) {
-        const fields = { username: u.username, name: u.name, role: u.role };
+        const fields = { username: u.username, name: u.name, role: u.role, department: u.department };
         if(u.password) fields.password = u.password;
         u.id ? await this.request(DST_USERS, 'PATCH', fields, u.id) : await this.request(DST_USERS, 'POST', fields);
     },
@@ -486,8 +511,9 @@ const VikaDB = {
         return list.sort((a,b) => b.createdAt - a.createdAt);
     },
     async addRecord(r) {
-        // ⭐ 修改：保存的是姓名 (currentUser.name)
-        const fields = { ...r, status: 'confirmed', createdBy: currentUser.name };
+        // ⭐ 关键点：将 operator 字段强制设为 currentUser.name
+        // createdBy 也设为姓名
+        const fields = { ...r, status: 'confirmed', createdBy: currentUser.name, operator: currentUser.name };
         const saved = (await this.request(DST_RECORDS, 'POST', fields))[0];
         return { ...saved.fields, id: saved.recordId, createdAt: saved.createdAt };
     },
@@ -699,7 +725,6 @@ function checkSubmit() {
 }
 
 document.getElementById('inpName').addEventListener('input', checkSubmit);
-document.getElementById('inpOperator').addEventListener('input', checkSubmit);
 document.getElementById('inpPhone').addEventListener('input', function() { 
     this.value = this.value.replace(/[^\d]/g, ''); 
     if(this.value.length > 11) this.value = this.value.slice(0, 11);
@@ -719,7 +744,8 @@ document.getElementById('bookingForm').addEventListener('submit', async function
             project: bookState.project,
             date: bookState.date,
             slot: bookState.slot,
-            operator: document.getElementById('inpOperator').value.trim(),
+            // 🟢 自动填充：operator 为当前用户的姓名
+            operator: currentUser.name,
             remark: document.getElementById('inpRemark').value.trim()
         };
         const saved = await VikaDB.addRecord(rec);
@@ -821,10 +847,11 @@ async function loadRecords() {
         project: document.getElementById('recProject').value,
         status: document.getElementById('recStatus').value
     });
-    // ⭐ 修复点：同时匹配 用户名 和 姓名，确保新老数据都能看到
-if (currentUser.role === 'operator') {
-    list = list.filter(r => r.createdBy === currentUser.username || r.createdBy === currentUser.name);
-}
+    
+    // 🟢 修复点：预约人员只能看自己（兼容用户名和姓名）
+    if (currentUser.role === 'operator') {
+        list = list.filter(r => r.createdBy === currentUser.username || r.createdBy === currentUser.name);
+    }
     
     const stats = {
         total: list.length,
@@ -1083,17 +1110,68 @@ async function saveCfg(e) {
 
 async function delCfg(id) { if(confirm('确定删除？')) { await VikaDB.deleteConfig(id); loadCfgTable(); } }
 
-// 🟢 用户管理列表 (超管可见密码)
+// 🟢 用户管理列表 (包含部门、搜索)
 async function loadUserTable() {
-    const list = await VikaDB.getUsers();
+    let list = await VikaDB.getUsers();
+    
+    // 搜索过滤逻辑
+    const keyword = document.getElementById('userSearch').value.trim().toLowerCase();
+    if(keyword) {
+        list = list.filter(u => 
+            (u.username && u.username.toLowerCase().includes(keyword)) ||
+            (u.name && u.name.toLowerCase().includes(keyword)) ||
+            (u.department && u.department.toLowerCase().includes(keyword))
+        );
+    }
+
     const isSuper = currentUser.role === 'superadmin';
-    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th>${isSuper?'<th>密码</th>':''}<th>角色</th><th>操作</th></tr></thead><tbody>`;
-    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td>${isSuper?`<td>${u.password||''}</td>`:''}<td>${{superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
+    let html = `<table class="data-tbl"><thead><tr><th>用户名</th><th>姓名</th><th>部门</th>${isSuper?'<th>密码</th>':''}<th>角色</th><th>操作</th></tr></thead><tbody>`;
+    list.forEach(u => html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${u.department||'-'}</td>${isSuper?`<td>${u.password||''}</td>`:''}<td>${{superadmin:'超级管理员',admin:'管理员',operator:'预约人员'}[u.role]}</td><td><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="editUser('${u.id}')">编辑</button><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">删除</button></div></td></tr>`);
     document.getElementById('userTable').innerHTML = html + '</tbody></table>';
 }
 async function editUser(id) { const users = await VikaDB.getUsers(); openUserModal(users.find(u => u.id === id)); }
-function openUserModal(u) { document.getElementById('userId').value = u ? u.id : ''; document.getElementById('userUsername').value = u ? u.username : ''; document.getElementById('userName').value = u ? u.name : ''; document.getElementById('userRole').value = u ? u.role : 'operator'; document.getElementById('userModal').classList.add('show'); }
-async function saveUser(e) { e.preventDefault(); await VikaDB.saveUser({ id: document.getElementById('userId').value, username: document.getElementById('userUsername').value, name: document.getElementById('userName').value, password: document.getElementById('userPwd').value, role: document.getElementById('userRole').value }); hideModal('userModal'); loadUserTable(); }
+function openUserModal(u) { 
+    document.getElementById('userId').value = u ? u.id : ''; 
+    document.getElementById('userUsername').value = u ? u.username : ''; 
+    document.getElementById('userName').value = u ? u.name : ''; 
+    document.getElementById('userRole').value = u ? u.role : 'operator'; 
+    document.getElementById('userDept').value = u ? u.department || '' : ''; // 填充部门
+    document.getElementById('userModal').classList.add('show'); 
+}
+
+// 🟢 保存用户（含用户名唯一性校验）
+async function saveUser(e) { 
+    e.preventDefault(); 
+    
+    const id = document.getElementById('userId').value;
+    const username = document.getElementById('userUsername').value.trim();
+    const name = document.getElementById('userName').value.trim();
+    const role = document.getElementById('userRole').value;
+    const dept = document.getElementById('userDept').value.trim();
+    const pwd = document.getElementById('userPwd').value;
+    
+    // 唯一性检查
+    const users = await VikaDB.getUsers();
+    // 查找是否存在 同名 但 ID不同 的用户
+    const exists = users.find(u => u.username === username && u.id !== id);
+    if(exists) {
+        alert('❌ 用户名已存在，请更换！');
+        return;
+    }
+
+    await VikaDB.saveUser({ 
+        id: id, 
+        username: username, 
+        name: name, 
+        password: pwd, 
+        role: role,
+        department: dept // 保存部门
+    }); 
+    
+    hideModal('userModal'); 
+    loadUserTable(); 
+}
+
 async function deleteUser(id) { if(confirm('确定删除？')) { await VikaDB.deleteUser(id); loadUserTable(); } }
 function requireSuperPwd(cb) { superPwdCallback = cb; document.getElementById('superPwdInput').value=''; document.getElementById('superPwdModal').classList.add('show'); }
 async function verifySuperPwd(e) { e.preventDefault(); const users = await VikaDB.getUsers(); if(users.some(u => u.role==='superadmin' && u.password===document.getElementById('superPwdInput').value)) { hideModal('superPwdModal'); if(superPwdCallback) superPwdCallback(); } else alert('错误'); }
@@ -1184,4 +1262,3 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
-
