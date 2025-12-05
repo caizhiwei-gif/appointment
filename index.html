@@ -821,7 +821,10 @@ async function loadRecords() {
         project: document.getElementById('recProject').value,
         status: document.getElementById('recStatus').value
     });
-    if (currentUser.role === 'operator') list = list.filter(r => r.createdBy === currentUser.username);
+    // ⭐ 修复点：同时匹配 用户名 和 姓名，确保新老数据都能看到
+if (currentUser.role === 'operator') {
+    list = list.filter(r => r.createdBy === currentUser.username || r.createdBy === currentUser.name);
+}
     
     const stats = {
         total: list.length,
@@ -1181,3 +1184,4 @@ document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
+
