@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画美线上预约系统 (v2.0 部门版)</title>
+    <title>画美线上预约系统 (v2.1 精简版)</title>
     
     <!-- 1. 引入 Excel 库 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -291,7 +291,7 @@
         </div>
     </div>
 
-    <!-- 3. 预约记录 -->
+    <!-- 3. 预约记录 (表格已精简) -->
     <div id="page-records" class="page">
         <div class="container-wide">
             <div class="tip-box" id="operatorTip" style="display:none;">💡 您当前是预约人员身份，只能查看自己创建的预约记录</div>
@@ -801,7 +801,7 @@ async function loadDashboard() {
 }
 document.getElementById('dashDate').addEventListener('change', loadDashboard); document.getElementById('dashSlot').addEventListener('change', loadDashboard);
 
-// ==================== 记录管理 (含点击复制功能 + 隐私保护) ====================
+// ==================== 记录管理 (含点击复制功能 + 隐私保护 + 表格精简) ====================
 
 // 🟢 切换显示/隐藏手机号
 function togglePhoneMask() {
@@ -868,12 +868,15 @@ async function loadRecords() {
     document.getElementById('recSubtitle').textContent = `共 ${list.length} 条记录`;
     
     if (!list.length) { tbl.innerHTML = '<div class="empty-box"><h3>暂无记录</h3></div>'; return; }
+    
+    // 🟢 精简表格：去掉“预约人”列，将“创建人”改名为“预约人”
     let html = `<table class="data-tbl"><thead><tr>
         <th class="checkbox-col"><input type="checkbox" onchange="toggleAllCb(this)"></th>
         <th>顾客 (点击复制)</th><th>电话</th><th>项目</th><th>日期</th><th>时段</th>
-        <th>预约人</th><th style="min-width:150px">备注 (点击复制/修改)</th>
-        <th>创建人</th><th>创建时间</th><th>状态</th><th>操作</th>
+        <th style="min-width:150px">备注 (点击复制/修改)</th>
+        <th>预约人</th><th>创建时间</th><th>状态</th><th>操作</th>
         </tr></thead><tbody>`;
+        
     list.forEach(r => {
         const sc = {confirmed:'st-pending',success:'st-success',cancelled:'st-cancel'}[r.status]||'';
         const stCn = STATUS_MAP[r.status] || r.status;
@@ -890,11 +893,10 @@ async function loadRecords() {
             <td class="copy-cell" onclick="copyText('${displayPhone}')">${displayPhone}</td>
             <td class="copy-cell" onclick="copyText('${r.project}')">${r.project}</td>
             <td>${r.date}</td><td>${r.slot}</td>
-            <td class="copy-cell" onclick="copyText('${r.operator||'-'}')">${r.operator||'-'}</td>
             <td class="copy-cell" onclick="if(event.target.tagName!=='INPUT') copyText('${r.remark||'-'}')">
                 <input type="text" class="form-control" style="padding:4px 8px; height:auto; font-size:0.85rem;" value="${r.remark||''}" onblur="saveRemark('${r.id}', this.value)" placeholder="无">
             </td>
-            <!-- 🟢 修改：创建人支持复制 -->
+            <!-- 🟢 修改：这里显示 createdBy (即预约人姓名) -->
             <td class="copy-cell" onclick="copyText('${r.createdBy||'-'}')">${r.createdBy||'-'}</td>
             <td>${createTime}</td><td><span class="status ${sc}">${stCn}</span></td>
             <td><div class="btn-group">${btns}</div></td>
@@ -929,8 +931,10 @@ async function exportExcel() {
     if(!list.length) return alert('当前没有数据可导出');
     const data = list.map((r,i) => ({ 
         '序号': i+1, '姓名': r.name, '电话': r.phone||'', '项目': r.project, '日期': r.date, '时段': r.slot,
-        '预约人': r.operator||'', '备注': r.remark||'', '状态': STATUS_MAP[r.status]||r.status,
-        '创建人': r.createdBy||'', '创建时间': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
+        '预约人': r.createdBy||'', // 🟢 导出时，预约人取 createdBy
+        '备注': r.remark||'', 
+        '状态': STATUS_MAP[r.status]||r.status,
+        '创建时间': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
     }));
     const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '预约记录'); XLSX.writeFile(wb, '预约数据.xlsx');
